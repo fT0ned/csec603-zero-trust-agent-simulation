@@ -1,0 +1,29 @@
+# Numbered setup and reproduction instructions
+
+Run commands from the repository root in PowerShell. Local verification uses Python 3.12, Windows and Docker Desktop with Linux containers. Internet access is needed for dependencies and the selected LLM API.
+
+1. Start Docker Desktop and run `powershell -ExecutionPolicy Bypass -File scripts/setup.ps1`. Use `-Python C:\path\to\python.exe` when an explicit Python path is needed. This installs the transitive lock, bootstraps trust-pinned SPIRE, builds the image and waits for service health.
+
+2. Configure the ignored `.env` using `.env.example`; preserve an existing file. Set `DEEPSEEK_API_KEY` and an authorized positive `STUDY_BUDGET_USD`. The current local aggregate cap is $4 within observed prepaid credit. Preserve `.runtime/spend.sqlite` across restarts; never reset it to bypass the cap. No automatic provider fallback occurs.
+
+3. Launch `powershell -ExecutionPolicy Bypass -File scripts/launch.ps1` and open [localhost:8765](http://127.0.0.1:8765). Leave its terminal running. Restart the dashboard after editing `.env`. Gateway/PA health endpoints are `http://127.0.0.1:8766/health` and `http://127.0.0.1:8767/health`; published listeners bind loopback.
+
+4. Verify with `.venv\Scripts\python.exe -m pytest -q`, `.venv\Scripts\python.exe -m scripts.verify_infra --output docs/verification/infrastructure.json`, and `.venv\Scripts\python.exe -m scripts.verify_controls`. These check real signatures/lifetimes, network isolation, concurrency, revocation, approvals and reset. Never globally reset/rebuild services during collection.
+
+5. Load the Engineering preset and Start, or run `.venv\Scripts\python.exe -m testbed.cli run --config configs/engineering.json --output results/engineering-NEW`. Always choose a new output directory. These 88 scripted engineering trials are worst-case control checks, separate from real-LLM findings.
+
+6. Load the Pilot preset and Start, or run `.venv\Scripts\python.exe -m testbed.cli run --config configs/pilot.json --output results/pilot-NEW`. The real pilot has 88 trials, four repetitions, a 300-second TTL, 305-second real observation cap and eight workers. CLI batches appear read-only in the dashboard; cancel them from their original terminal. Dashboard-managed batches have process-tree cancellation. Partial evidence is retained.
+
+7. Analyze the pilot with `.venv\Scripts\python.exe -m analysis.cli --input results/pilot-NEW --output results/pilot-NEW/analysis --verify-raw`. Review every metric, task/provider failure, probe/clock timestamp, cost, audit/tamper test, independent tool-state evidence and reset. Finalize parameters before full collection. The planned full matrix has 1,200 unique trials, 30 repetitions per cell, three lifetimes, a 90-second post-expiry margin, maximum window 3690 seconds and 16 workers. Commit/push code, configuration and pilot evidence. Run `.venv\Scripts\python.exe -m testbed.freeze --pilot results/pilot-NEW --study configs/study.json`, commit/push the approved freeze, create `git tag study-freeze-v1`, then `git push origin study-freeze-v1`. The freeze command refuses missing/invalid pilot evidence, insufficient budget and dirty source. The full runner checks the pushed tag and frozen hashes; never manually mark a blocked freeze approved.
+
+8. Load the Full Study preset and Start, or run `.venv\Scripts\python.exe -m testbed.cli run --config configs/study.json --output results/study-NEW`. Real-time expiry cells take hours; keep the computer awake and Docker running. Do not shorten time or substitute a scripted agent. Infrastructure failures retain their originals and receive one same-seed rerun; model/provider errors remain experimental units. Interrupted/partial batches are not complete studies.
+
+9. Reproduce full analysis with `.venv\Scripts\python.exe -m analysis.cli --input results/study-NEW --output results/study-NEW/analysis --verify-raw`. Outputs include metric CSV/JSON, paired/unpaired tests, adjusted comparisons, uncertainty, censoring/survival summaries, attribution confusion, SVG figures, source hashes and hypothesis assessments. Raw files are read-only. Engineering/pilot/full and model/scenario/TTL/revocation/approval strata remain separate; missing observations remain missing.
+
+10. Select a batch/trial to inspect summary, prompt/response transcript, actions, policy/audit, checkpoint, committed tool ground truth and tamper evidence. JSONL chunks are losslessly gzip-compressed; the dashboard decodes them. Offline use `gzip.open(path, 'rt', encoding='utf-8')`. Original hashes/lengths are in `compression.json`, and compressed byte hashes in `raw-manifest.json`. Export CSV/JSON, tables, plots or a complete sanitized ZIP. ZIP checksums cover exported bytes, which may differ from original hashes after redaction.
+
+11. Dashboard Reset clears the selection while preserving evidence; each new run resets its own task snapshot. Between batches, `.venv\Scripts\python.exe -m scripts.reset` restarts the whole testbed while preserving host results, spending history and audit volumes. Retain interrupted evidence and use a fresh output for reruns. Do not use volume deletion as a routine reset.
+
+12. Extract paper evidence from the chosen full batch's `analysis/results.md`, CSVs, `hypothesis-assessment.json` and SVGs, together with `docs/paper-artifacts.md`, `docs/analysis-plan.md` and `docs/method.md`. Every quantitative claim needs condition/model/date, denominator, units and uncertainty. Report censoring and unsupported hypotheses. Integrate into the existing Overleaf manuscript, retain the original RQs, and complete the human reference/feedback audit. This repository does not itself submit the manuscript.
+
+See `docs/progress.md` and the final `docs/handoff.md` when present for exact retained batches and current status.

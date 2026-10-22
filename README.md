@@ -1,15 +1,17 @@
 # Zero Trust for Agentic AI
 
-Group Leopard's CSEC 603 Report 2 simulation testbed. Track B evaluates identity, delegation, and accountability controls for an LLM agent operating mock enterprise tools.
+Group Leopard's CSEC 603 Track B testbed compares static keys, real SPIRE workload identity and a combined OPA/delegation/workflow/approval/audit treatment. It includes separate agent and stolen-credential clients, private mock enterprise tools, real LLM tool calling, a local dashboard and reproducible analysis.
 
-Current status: repository initialized for implementation. No testbed, pilot, or experimental results exist in this repository yet.
+The parent enterprisePhase2_FINAL.docx governs the design; official requirements and professor feedback take precedence. Read [the research brief](docs/research-brief.md), [method and limitations](docs/method.md), and [numbered runbook](docs/runbook.md). Current status is in [durable progress notes](docs/progress.md).
 
-The controlling project brief is `enterprisePhase2_FINAL.docx`, titled **Leopard Report 2 - Source of Truth**, dated October 21, 2026. Official course requirements and instructor feedback take precedence over the brief. The original documents remain outside this repository in the local parent Phase2 directory; they are not included on GitHub.
+1. Start Docker Desktop, then run `powershell -ExecutionPolicy Bypass -File scripts/setup.ps1`.
+2. Configure the ignored `.env` from `.env.example` for paid runs and preserve the spending ledger.
+3. Run `powershell -ExecutionPolicy Bypass -File scripts/launch.ps1` and open [localhost:8765](http://127.0.0.1:8765).
+4. Load an engineering, pilot or full-study preset. Full collection requires a validated pilot and pushed pre-run freeze.
+5. Inspect trials and export CSV/JSON, tables, plots and a sanitized reproducibility bundle.
 
-We will compare static credentials (C0), attested short-lived identity alone (C1), and full Zero Trust controls (C2). Two C2 variants isolate workflow limits and approval quality. All conditions use the same gateway credential checks and revocation deny-list.
+Scripted engineering evidence and real-LLM findings are always labeled separately. No full-study result is claimed before collection and verification finish. Only synthetic enterprise data enter the tools and prompts; mock actions send no email and transfer no money.
 
-The planned stack is Docker Compose, SPIFFE/SPIRE, Open Policy Agent, a Python gateway and policy administrator, mock files/email/CRM/payments services, a real LLM tool-calling agent, an experiment harness, and reproducible analysis scripts. Versions and provider choices remain to be verified and pinned.
+The default provider is DeepSeek Flash. Dated model metadata, returned identifiers, system fingerprints, usage and complete interaction transcripts are retained. Its API alias is mutable, limiting exact model-version reproducibility. Provider secrets never enter containers or repository evidence. A shared SQLite reservation ledger enforces the aggregate spending cap across workers and batches.
 
-Read [the engineering review](docs/research-brief.md) for the fixed design, build sequence, open parameters, and experiment safeguards.
-
-Keep API keys and disposable credentials outside Git. Only mock enterprise data may be sent to an LLM provider. Do not start full experiments until the pilot and pre-run freeze checklist are complete.
+See [analysis rules](docs/analysis-plan.md), [paper artifact mappings](docs/paper-artifacts.md) and [verification evidence](docs/verification). This single-machine study does not establish production-enterprise effectiveness.
