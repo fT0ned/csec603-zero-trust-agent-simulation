@@ -6,8 +6,8 @@ This file supplies implementation-to-paper mappings and draft analytical artifac
 
 | Required artifact | Source or implementation material | Integration requirement |
 | --- | --- | --- |
-| Feedback response matrix | Appendix A mapping below | Add exact manuscript locations and honest completion status |
-| Literature evidence matrix | Retain Report 1 Table I | Add architecture/metric/scenario justification column; independently audit references |
+| Feedback response matrix | [Detailed source-page mapping](feedback-response-matrix.md), plus Appendix A summary below | Repository actions mapped to professor feedback; exact manuscript locations and final status remain pending |
+| Literature evidence matrix | [Standalone 16-entry matrix and authoritative foundations](literature-evidence-matrix.md), [32-reference verification register](reference-verification.md) | Includes method, findings, limits, original quality rating, evidence type and design justification; inaccessible primary claims remain explicitly unverified |
 | Comparative analysis table | Condition table below plus generated metrics/comparisons CSV | Insert measured cells only after collection and manifest verification |
 | Architecture/workflow diagram | [Deployed SVG](figures/deployed-architecture.svg), [editable Mermaid](figures/deployed-architecture.mmd), [implementation explanation](architecture.md) | Shows separate issuance/delegation, OPA PE→PA administration, gateway PEP mediation and actual PA tool dispatch, distinct attacks, and independent evidence boundaries |
 | Risk/control mapping | Table II below | Distinguish prevention, containment, detection and response |
@@ -16,6 +16,8 @@ This file supplies implementation-to-paper mappings and draft analytical artifac
 | Simulation design table | Frozen manifest, policy/task/payload catalogs and analysis plan | Report exact versions, model settings, timing, run count, thresholds and reset procedure |
 | Results tables/plots | `analysis/results.md`, CSV, JSON and standalone SVG | Confirm no mixed modes or pilot/full results; interpret null results |
 | Threats-to-validity table | Table V below | Include dataset bias, model version, attribution assumptions and single-machine constraints |
+
+The ten artifact categories have repository source material. This does not mean ten finalized manuscript artifacts: comparison/recommendation/results cells await verified full-study evidence, bibliography verification remains partial where primary access failed, and all final manuscript locations/captions/body discussion require integration. The literature and feedback documents above were prepared during collection without modifying the frozen protocol or claiming full-study outcomes.
 
 ## Table I Comparative condition design authors’ work
 
@@ -92,10 +94,10 @@ Table IV prioritizes recommendations by architectural necessity and implementati
 | Construct | Individual calls treated as independent runs | Run-level analysis and paired resampling; action ratios labeled descriptive |
 | Statistical | Rare failures absent in small samples | Wilson intervals and precision caveat; freeze count, no outcome-driven extension |
 | Statistical | Censored values treated as observed lifetimes | KM/log-rank and boundary-validity rate; no ordinary averages of censored times |
-| External | One agent/model snapshot/date and synthetic enterprise dataset | Record exact configuration; limit transfer claims and retain dataset bias |
+| External | One agent/model alias/date and synthetic enterprise dataset | Preserve requested/returned model identifiers, documented version and fingerprints; the mutable provider alias prevents guaranteed immutable-model reproduction |
 | External | Ideal careful approver and one-machine network | State best-case approval assumption and limited timing generalization |
 | External | No control-plane compromise, multi-agent delegation or recovery | Explicit scope exclusions; future work rather than implied validation |
-| Reproducibility | Provider drift, missing raw files or unpinned versions | Model snapshot, freeze manifest, dependency versions, hashes and complete raw archive |
+| Reproducibility | Provider drift, missing raw files or unpinned versions | Preserve model alias/version/date/fingerprint with the drift limitation, freeze manifest, dependency versions, hashes and complete raw archive |
 
 Table V bounds interpretation of every result. A measured effect in this testbed is evidence about this testbed and workload, not proof about all enterprise deployments.
 
@@ -107,10 +109,10 @@ Table V bounds interpretation of every result. A measured effect in this testbed
 | Separate short lifetime from revocation | Separate S3/S4 protocols and survival/time metrics | Pending measured results and manuscript integration |
 | Separate authenticity from action legitimacy | Distinct S2 coercion and S3 replay; attribution scoring versus independent truth | Pending measured results and manuscript integration |
 | Add dedicated enterprise recommendations and matrix | Table IV draft with prerequisites and implementation risk | Pending author review and manuscript section 13 |
-| Complete architecture, comparison and risk mapping | Governing control-path figure; Tables I/II and topology documentation | Pending deployed verification and figure integration |
+| Complete architecture, comparison and risk mapping | Deployed SVG/editable Mermaid, Tables I/II and `docs/architecture.md` | Deployed topology and controls verified in `docs/verification`; manuscript figure integration remains pending |
 | Evaluate cumulative workflow authority | S5/noWF comparison defined in analysis plan | Pending full empirical collection |
 | Approval prevents only with reliable review | Approval-dependent C2/RS strata; idealized-approver limitation | Pending empirical collection |
-| Protect the critical control plane | Explicit boundaries and Table II/IV guidance | Pending configuration verification |
+| Protect the critical control plane | Explicit boundaries and Table II/IV guidance | Repository isolation/configuration verified in `docs/verification`; manuscript integration remains pending and control-plane compromise is outside scope |
 | Add abbreviations and academic-language fixes | Carry forward official writing checklist | Pending manuscript-wide edit; no completion claimed |
 | Audit IEEE references and preprints | Preserve evidence classifications and verify metadata | Pending bibliography audit |
 | Do not pool incompatible studies/percentages | Analysis partitions mode/phase/model/scenario/lifetime/revocation | Implemented in derivation code; manuscript review still required |
@@ -120,4 +122,4 @@ Appendix A must describe changes actually made in the paper. Repository readines
 
 ## Appendix B reproducibility checklist
 
-Record the private repository commit/freeze tag, hardware and operating system, container digests, dependency versions, model snapshot and sampling settings, provider terms/access date, task/payload sources and adaptation notes, trusted scopes, workflow budgets, approver rules, JIT duration, timings/windows/concurrency, pairing and rerun policy, final manifest, raw artifact hashes, costs and budget ceiling. Supply numbered launch/reset/run/analyze/export instructions and verify them on a clean environment. Include raw/processed summaries and the calculation method; do not expose live provider keys or replayable testbed credentials.
+Record the private repository commit/freeze tag, hardware and operating system, container digests, dependency versions, requested/returned model alias, documented version, system fingerprints and sampling settings, provider terms/access date, task/payload sources and adaptation notes, trusted scopes, workflow budgets, approver rules, JIT duration, timings/windows/concurrency, pairing and rerun policy, final manifest, raw artifact hashes, costs and budget ceiling. State that the provider's mutable alias prevents guaranteed immutable-model reproduction. Supply numbered launch/reset/run/analyze/export instructions and verify them on a clean environment. Include raw/processed summaries and the calculation method; do not expose live provider keys or replayable testbed credentials.

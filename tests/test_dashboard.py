@@ -229,3 +229,85 @@ def test_cli_batch_discovery_is_read_only_and_tracks_real_completion(console):
     assert client.post("/api/reset").status_code == 200
     assert manifest_path.read_bytes() == original
     assert not (folder / "job.json").exists()
+
+
+def test_monitoring_compacts_large_summaries_and_invalidates_cache(console, monkeypatch):
+    client, manager, repo = console
+    folder = manager.root / "large-cli"
+    run = folder / "runs" / "large-run"
+    run.mkdir(parents=True)
+    (folder / "manifest.json").write_text('{"mode":"llm","phase":"full"}')
+    (folder / "config.json").write_text('{"mode":"llm","phase":"full"}')
+    summary = run / "summary.json"
+    raw = {"status": "completed", "condition": "C2", "scenario": "S4",
+           "latencies_ms": [1] * 10000 + [9], "authorization_ms": [2] * 10001,
+           "large_unknown": {"events": list(range(10001))},
+           "metadata": {"model": "deepseek-flash", "model_snapshot": "returned-model", "approval_dependent": False}}
+    summary.write_text(json.dumps(raw))
+    original = summary.read_bytes()
+    reads = []
+    real_read = Path.read_text
+
+    def tracked_read(path, *args, **kwargs):
+        if path == summary:
+            reads.append(path)
+        return real_read(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", tracked_read)
+    assert client.get("/api/jobs").json()[0]["completed_runs"] == 1
+    compact = client.get("/api/jobs/large-cli/runs")
+    assert len(compact.content) < 1000
+    item = compact.json()[0]
+    assert item["run_median_latency_ms"] == 1
+    assert item["model_snapshot"] == "returned-model"
+    assert item["approval_dependent"] is False
+    assert "latencies_ms" not in item and "large_unknown" not in item and "authorization_ms" not in item
+    for _ in range(3):
+        client.get("/api/jobs")
+        client.get("/api/jobs/large-cli/runs")
+    assert len(reads) == 1
+    assert all(not isinstance(value, (dict, list)) for _, cached in manager.summary_cache.values() for value in cached.values())
+
+    # Export and trace routes retain complete arrays; caching never rewrites raw data.
+    exported = client.get("/api/jobs/large-cli/export.json").json()[0]
+    assert exported["latencies_ms"] == raw["latencies_ms"]
+    assert exported["large_unknown"] == raw["large_unknown"]
+    assert "latencies_ms" in client.get("/api/jobs/large-cli/export.csv").text
+    assert json.loads(client.get("/api/jobs/large-cli/trace", params={"path": "runs/large-run/summary.json"}).text)["authorization_ms"] == raw["authorization_ms"]
+    assert summary.read_bytes() == original
+
+    # Same-size rewrites invalidate on nanosecond mtime; size changes invalidate
+    # even if a filesystem preserves the previous timestamp.
+    import os
+    previous = summary.stat()
+    raw["latencies_ms"] = [9] * 10000 + [1]
+    summary.write_text(json.dumps(raw))
+    assert summary.stat().st_size == previous.st_size
+    os.utime(summary, ns=(previous.st_atime_ns, previous.st_mtime_ns + 1_000_000))
+    assert client.get("/api/jobs/large-cli/runs").json()[0]["run_median_latency_ms"] == 9
+    before = len(reads)
+    previous = summary.stat()
+    with summary.open("a") as stream:
+        stream.write(" ")
+    os.utime(summary, ns=(previous.st_atime_ns, previous.st_mtime_ns))
+    client.get("/api/jobs")
+    assert len(reads) == before + 1
+    client.get("/api/jobs/large-cli/runs")
+    assert len(reads) == before + 1
+
+
+def test_external_operator_interruption_is_not_reported_as_infrastructure_failure(console):
+    client, manager, repo = console
+    folder = manager.root / "partial-cli"
+    folder.mkdir()
+    (folder / "manifest.json").write_text('{"mode":"llm","phase":"full"}')
+    (folder / "config.json").write_text('{"mode":"llm","phase":"full"}')
+    marker = folder / "batch-status.json"
+    marker.write_text(json.dumps({"remaining_failures": 32, "interrupted": True, "reason": "operator monitoring repair; partial collection"}))
+    original = marker.read_bytes()
+    result = client.get("/api/jobs/partial-cli").json()
+    assert result["status"] == "interrupted"
+    assert "operator monitoring repair" in result["message"]
+    assert "infrastructure failures" not in result["message"]
+    assert marker.read_bytes() == original
+    assert not (folder / "job.json").exists()

@@ -22,3 +22,12 @@ Batches launched from the command line are discovered from their existing manife
 `python -m pytest tests/test_dashboard.py -q` verifies the collection/analysis lifecycle, retained raw evidence, sanitized export bundle, path/host/origin boundaries, uncredentialed and unfrozen-study rejection, cancellation, single-active-batch handling, and restart recovery. These tests substitute a local runner fixture to isolate dashboard behavior; they do not establish security-control or LLM research findings. The repository handoff records the separate browser-to-real-testbed verification.
 
 Replay handoff timing uses the configured `theft_delay_seconds` (default 120 seconds, allowed range 1–1800 seconds), measured from credential receipt rather than variable model completion. Load the repository preset to use the frozen study timing and concurrency; review these fields before collection.
+
+
+## Host monitoring update after study-freeze-v1
+
+The host dashboard caches compact UI projections by each summary's nanosecond modification time and byte size. It retains only fields needed by the interface and a within-run latency median, discarding latency arrays and other raw detail after the first read or a changed file. `/runs` returns these compact projections; explicit CSV/JSON exports and trace inspection still read complete sanitized raw summaries. The comparison latency is the median across per-run medians in milliseconds, matching the analysis unit of independent runs. Unchanged status/completion counters no longer trigger repeated evidence reloads; active collection progress remains visible through the jobs endpoint.
+
+This is a host UI/monitoring-only change after the collection freeze. It does not modify collection code, frozen design, collected source snapshots, raw observations, or analysis. A reproducibility export continues to prioritize its collection-time source; export-time support files may reflect this newer dashboard revision.
+
+External CLI batches whose completion marker records `interrupted: true` display **interrupted** with the preserved operator reason. Unfinished trial summaries remain unchanged; they are not relabelled as completed or counted as infrastructure failures by the dashboard.

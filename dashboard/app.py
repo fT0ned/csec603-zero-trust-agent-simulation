@@ -8,6 +8,8 @@ import hashlib
 import gzip
 import io
 import json
+import math
+import statistics
 import os
 from pathlib import Path
 import re
@@ -220,6 +222,8 @@ class JobManager:
         self.lock = threading.RLock()
         self.processes: dict[str, subprocess.Popen] = {}
         self.jobs = {}
+        # UI projections only: never retain raw latency/action arrays in memory.
+        self.summary_cache = {}
         for path in self.root.glob("*/job.json"):
             try:
                 if not path.resolve().is_relative_to(self.root):
@@ -256,7 +260,13 @@ class JobManager:
             if final_path.is_file():
                 final = json.loads(final_path.read_text(encoding="utf-8"))
                 remaining = final.get("remaining_failures")
-                if isinstance(remaining, int):
+                if final.get("interrupted") is True:
+                    status = "interrupted"
+                    reason = final.get("reason")
+                    message = "CLI collection interrupted; partial evidence retained"
+                    if isinstance(reason, str) and reason.strip():
+                        message += ": " + reason
+                elif isinstance(remaining, int):
                     status = "completed" if remaining == 0 else "failed"
                     message = "CLI collection complete" if remaining == 0 else "CLI collection ended with infrastructure failures; evidence retained"
                     message += "; analysis available" if analysis else "; analysis not generated"
@@ -297,17 +307,55 @@ class JobManager:
         self.get(job_id)
         return self.root / job_id
 
+    def compact_summary(self, root: Path, path: Path):
+        """Cache a bounded UI projection until the raw file's mtime/size changes."""
+        resolved = safe_file(root, path.relative_to(root).as_posix())
+        with self.lock:
+            stat = resolved.stat()
+            fingerprint = (stat.st_mtime_ns, stat.st_size)
+            cached = self.summary_cache.get(resolved)
+            if cached and cached[0] == fingerprint:
+                return dict(cached[1])
+            raw = json.loads(resolved.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict):
+                raise ValueError("Summary must be an object")
+            fields = ("run_id", "condition", "scenario", "status", "mode", "phase", "collection_id",
+                      "ttl_seconds", "revocation_mode", "unauthorized_outcome", "harmful_attempts",
+                      "harmful_executed", "attribution_true", "attribution_predicted")
+            item = {key: raw[key] for key in fields if key in raw and isinstance(raw[key], (str, int, float, bool, type(None)))}
+            metadata = raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {}
+            for key in ("model", "model_snapshot", "approval_dependent"):
+                value = raw.get(key, metadata.get(key))
+                if isinstance(value, (str, int, float, bool, type(None))):
+                    item[key] = value
+            values = raw.get("latencies_ms")
+            if not isinstance(values, list):
+                values = [values]
+            values = [value for value in values if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)]
+            item["run_median_latency_ms"] = statistics.median(values) if values else None
+            item.setdefault("run_id", path.parent.name)
+            item["summary_path"] = path.relative_to(root).as_posix()
+            item = redact(item)
+            # A writer replacing the summary during this read must invalidate it.
+            after = resolved.stat()
+            if (after.st_mtime_ns, after.st_size) == fingerprint:
+                self.summary_cache[resolved] = (fingerprint, item)
+            return dict(item)
+
+    def compact_runs(self, job_id):
+        root = self.root / job_id
+        result = []
+        for path in sorted((root / "runs").glob("*/summary.json")):
+            try:
+                result.append(self.compact_summary(root, path))
+            except (ValueError, OSError, HTTPException):
+                continue
+        return result
+
     def snapshot(self, job):
         result = dict(job)
         root = self.root / job["id"]
-        finished = 0
-        for path in (root / "runs").glob("*/summary.json"):
-            try:
-                if json.loads(path.read_text(encoding="utf-8")).get("status") != "running":
-                    finished += 1
-            except (OSError, ValueError):
-                continue
-        result["completed_runs"] = finished
+        result["completed_runs"] = sum(item.get("status") != "running" for item in self.compact_runs(job["id"]))
         result["evidence_label"] = {"llm": "REAL LLM", "scripted": "SCRIPTED CONTROL CHECK"}.get(job["config"].get("mode"), "MODE NOT RECORDED")
         status_file = root / "progress.json"
         if status_file.exists():
@@ -526,6 +574,11 @@ def create_app(results_root: Path | None = None, repo: Path = REPO):
 
     @app.get("/api/jobs/{job_id}/runs")
     def runs(job_id: str):
+        manager.path(job_id)
+        return manager.compact_runs(job_id)
+
+    def full_runs(job_id: str):
+        # Explicit exports retain the complete sanitized raw summaries.
         root = manager.path(job_id)
         result = []
         for path in sorted((root / "runs").glob("*/summary.json")):
@@ -589,11 +642,11 @@ def create_app(results_root: Path | None = None, repo: Path = REPO):
 
     @app.get("/api/jobs/{job_id}/export.json")
     def export_json(job_id: str):
-        return Response(json.dumps(runs(job_id), indent=2), media_type="application/json", headers={"Content-Disposition": f'attachment; filename="{job_id}-runs.json"'})
+        return Response(json.dumps(full_runs(job_id), indent=2), media_type="application/json", headers={"Content-Disposition": f'attachment; filename="{job_id}-runs.json"'})
 
     @app.get("/api/jobs/{job_id}/export.csv")
     def export_csv(job_id: str):
-        rows = runs(job_id)
+        rows = full_runs(job_id)
         out = io.StringIO(newline="")
         fields = sorted({k for row in rows for k in row})
         writer = csv.DictWriter(out, fieldnames=fields)

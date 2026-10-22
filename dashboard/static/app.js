@@ -56,7 +56,7 @@ async function refreshJobs() {
       $("cancel-button").hidden = !isActive(current) || current.external;
       $("bundle-export").hidden = isActive(current);
       $("selected-label").textContent = current.id + " · " + current.status + " · " + current.completed_runs + " recorded trials";
-      if (lastRunCount !== current.completed_runs || lastJobStatus !== current.status || lastJobMessage !== current.message || isActive(current)) { lastRunCount = current.completed_runs; lastJobStatus = current.status; lastJobMessage = current.message; await loadEvidence(); }
+      if (lastRunCount !== current.completed_runs || lastJobStatus !== current.status || lastJobMessage !== current.message) { lastRunCount = current.completed_runs; lastJobStatus = current.status; lastJobMessage = current.message; await loadEvidence(); }
       if (isActive(current) && $("trace-file").value === "runner.log") await loadTrace();
     }
   } catch (error) { notify("Could not refresh collection history: " + error.message, true); }
@@ -71,7 +71,6 @@ async function selectJob(id) {
   $("csv-export").href = `/api/jobs/${id}/export.csv`;
   $("json-export").href = `/api/jobs/${id}/export.json`;
   $("bundle-export").href = `/api/jobs/${id}/bundle`;
-  await loadEvidence();
   await refreshJobs();
 }
 
@@ -126,13 +125,13 @@ function comparison(runs) {
     if (!grouped.has(key)) grouped.set(key, []); grouped.get(key).push(run);
   }
   const table = node("table"), head = node("thead"), tr = node("tr");
-  ["Condition / scenario", "Lifetime / revocation", "Recorded trials", "Unauthorized outcomes", "Harmful actions executed", "Median action latency", "Attribution correct"].forEach(text => tr.append(node("th", text)));
+  ["Condition / scenario", "Lifetime / revocation", "Recorded trials", "Unauthorized outcomes", "Harmful actions executed", "Median of run medians (ms)", "Attribution correct"].forEach(text => tr.append(node("th", text)));
   head.append(tr); table.append(head); const body = node("tbody");
   for (const group of grouped.values()) {
     const first = group[0], row = node("tr");
     const attacks = group.filter(r => typeof r.unauthorized_outcome === "boolean");
     const harmful = group.filter(r => typeof r.harmful_executed === "number" && typeof r.harmful_attempts === "number");
-    const latencies = group.flatMap(r => r.latencies_ms || []).filter(x => typeof x === "number").sort((a,b) => a-b);
+    const latencies = group.map(r => r.run_median_latency_ms).filter(x => typeof x === "number" && Number.isFinite(x)).sort((a,b) => a-b);
     const median = latencies.length ? (latencies[Math.floor((latencies.length-1)/2)] + latencies[Math.floor(latencies.length/2)]) / 2 : null;
     const attribution = group.filter(r => typeof r.attribution_true === "string" && typeof r.attribution_predicted === "string");
     const values = [`${first.condition} / ${first.scenario}`, `${first.ttl_seconds ?? "—"} s / ${first.revocation_mode || "—"}`, group.length, attacks.length ? `${attacks.filter(r=>r.unauthorized_outcome).length} / ${attacks.length}` : "Not measured", harmful.length ? `${harmful.reduce((n,r)=>n+r.harmful_executed,0)} / ${harmful.reduce((n,r)=>n+r.harmful_attempts,0)} attempted` : "Not measured", median === null ? "Not measured" : median.toFixed(2)+" ms", attribution.length ? `${attribution.filter(r=>r.attribution_true===r.attribution_predicted).length} / ${attribution.length}` : "Not measured"];
