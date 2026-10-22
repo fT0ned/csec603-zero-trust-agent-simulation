@@ -14,9 +14,10 @@ import json
 import math
 from pathlib import Path
 import statistics
+from datetime import datetime,timezone
 
 from .statistics import (bootstrap_difference, cluster_ratio, describe, fisher_exact, holm,
-                         kaplan_meier, logrank, mann_whitney, mcnemar, wilcoxon, wilson)
+                         kaplan_meier, logrank, mann_whitney, mcnemar, quantile, wilcoxon, wilson)
 
 CONDITIONS = ("C0", "C1", "C2", "C2-noWF", "C2-RS")
 PAIRS = (("C0","C1"),("C1","C2"),("C0","C2"),("C2","C2-noWF"),("C2","C2-RS"))
@@ -25,6 +26,7 @@ STRATA = ("collection_id", "mode", "phase", "model", "model_snapshot", "scenario
 TIME_METRICS = ("run_median_latency_ms", "run_median_authorization_ms", "reachable_authority",
                 "cumulative_ratio", "approval_count", "approval_delay_ms",
                 "revocation_propagation_ms", "revocation_to_denial_ms", "cost_usd")
+DESCRIPTIVE_TIME_METRICS = ("run_p95_latency_ms", "run_p95_authorization_ms")
 RATE_METRICS = ("unauthorized_outcome", "injection_followed", "task_completed", "attribution_correct", "intent_violating_outcome")
 INFRA_FAILURES = {"infrastructure_error", "infra_error", "infrastructure_failure", "crashed"}
 PENDING_STATUSES = {"running", "pending", "queued"}
@@ -51,8 +53,14 @@ def normalize(raw):
             run[target] = statistics.median(values) if values else None
         elif finite_number(values):
             run[target] = values
+            values = [values]
         else:
             run[target] = None
+            values = []
+        percentile_target="run_p95_latency_ms" if source=="latencies_ms" else "run_p95_authorization_ms"
+        count_target="latency_action_samples" if source=="latencies_ms" else "authorization_action_samples"
+        run[percentile_target]=quantile(values,.95)
+        run[count_target]=len(values)
     if run.get("scenario") == "S1" and run.get("task_outcome") is not None:
         run["task_completed"] = run["task_outcome"] == "completed"
     else:
@@ -174,7 +182,7 @@ def summarize(records):
                    task_outcome_counts=dict(Counter(r.get("task_outcome","Not measured") for r in valid)))
         for metric in RATE_METRICS:
             row[metric] = rate([r.get(metric) for r in valid])
-        for metric in TIME_METRICS:
+        for metric in TIME_METRICS+DESCRIPTIVE_TIME_METRICS:
             row[metric] = describe([r.get(metric) for r in valid if finite_number(r.get(metric))])
         for numerator,denominator,label in (("harmful_executed","harmful_attempts","harmful_action_success"),
                                              ("audit_complete","audit_total","audit_completeness"),
@@ -386,6 +394,28 @@ def plot_survival(path,rows):
     path.write_text('\n'.join(p),encoding="utf-8")
 
 
+def markdown_context(records):
+    """Presentation-only lookup for complete model/date labels in compact tables."""
+    fields=("collection_id","mode","phase","model","model_snapshot")
+    groups=defaultdict(list)
+    for record in records:groups[tuple(record.get(field) for field in fields)].append(record)
+    labels={};lines=[]
+    for index,(context,runs) in enumerate(sorted(groups.items(),key=lambda item:str(item[0])),1):
+        label=f"K{index}";labels[context]=label
+        dates=sorted({datetime.fromtimestamp(value,timezone.utc).date().isoformat() for run in runs
+                      for value in (run.get("metadata",{}).get("started_at"),run.get("metadata",{}).get("finished_at")) if finite_number(value)})
+        date_label="Not reported" if not dates else dates[0] if len(dates)==1 else dates[0]+" to "+dates[-1]
+        collection,mode,phase,model,snapshot=(str(value).replace("\n"," ") for value in context)
+        lines.append(f"{label}: collection `{collection}`; agent mode `{mode}`; phase `{phase}`; requested model `{model}`; returned model `{snapshot}`; collection dates {date_label} UTC.")
+    return fields,labels,lines
+
+
+def approval_label(row):
+    if row.get("scenario") not in ("S2","S5"):return "Not applicable"
+    value=row.get("approval_dependent")
+    return "Approval-dependent" if value is True else "Other payloads" if value is False else "Not reported"
+
+
 def analyze(root,output=None,bootstrap_samples=2000):
     root=Path(root)
     output=Path(output) if output else root/"analysis"
@@ -397,39 +427,67 @@ def analyze(root,output=None,bootstrap_samples=2000):
     comparisons=compare(records,bootstrap_samples)
     from .hypotheses import assess
     assessment=assess(root,records,comparisons,tables)
+    run_percentiles=[{**{field:r.get(field) for field in STRATA},"condition":r["condition"],
+                      **{field:r.get(field) for field in ("run_id","seed","pair_id","status","source_path","source_sha256",
+                         "run_median_latency_ms","run_p95_latency_ms","latency_action_samples",
+                         "run_median_authorization_ms","run_p95_authorization_ms","authorization_action_samples")},
+                      "included_in_descriptive_summary":eligible_record(r)} for r in records]
     report={"schema_version":1,"context":"Measured in this testbed only; no production-enterprise inference",
             "runs":len(records),"load_errors":errors,"sources":sources,"tables":tables,
             "comparisons":comparisons,"attribution_confusion":confusion,"survival":survival,
             "censoring":"First-denial KM endpoints; last-success exposure is a lower bound. No average of censored times.",
             "bootstrap_seed":603,"bootstrap_samples":bootstrap_samples,
             "hypothesis_assessment":assessment,
+            "run_latency_percentiles":run_percentiles,
+            "latency_metric_units":{
+                "run_median_latency_ms":"Within-run median of observed end-to-end action latencies, milliseconds",
+                "run_p95_latency_ms":"Within-run 95th percentile of observed end-to-end action latencies, milliseconds",
+                "run_median_authorization_ms":"Within-run median of recorded policy-decision/enforcement durations, milliseconds",
+                "run_p95_authorization_ms":"Within-run 95th percentile of recorded policy-decision/enforcement durations, milliseconds",
+                "aggregation":"Each metric's n/median/q1/q3/p95 describes its distribution across independent runs. A p95 of run medians is not a call-level p95. Per-run p95 metrics are descriptive H4 costs, with no added significance tests or multiplicity family."},
             "duplicate_exclusions":[{"run_id":r.get("run_id"),"source_path":r["source_path"],"reason":r["analysis_excluded_reason"],"canonical_run_id":r.get("analysis_canonical_run_id")} for r in records if r.get("analysis_excluded_reason")],
             "hypothesis_support":"See hypothesis-assessment.json; engineering/pilot data are descriptive and full support requires preserved pre-run evidence gates."}
     (output/"report.json").write_text(json.dumps(report,indent=2,allow_nan=False),encoding="utf-8")
     (output/"hypothesis-assessment.json").write_text(json.dumps(assessment,indent=2,allow_nan=False),encoding="utf-8")
-    for name,rows in (("metrics",tables),("comparisons",comparisons),("attribution-confusion",confusion),("survival",survival),("source-manifest",sources)):
+    for name,rows in (("metrics",tables),("comparisons",comparisons),("attribution-confusion",confusion),("survival",survival),("source-manifest",sources),("run-latency-percentiles",run_percentiles)):
         write_csv(output/f"{name}.csv",rows)
     plot_rates(output/"unauthorized-outcomes.svg",tables)
     plot_survival(output/"replay-survival.svg",survival)
+    context_fields,context_labels,context_lines=markdown_context(records)
+    context_for=lambda row:context_labels[tuple(row.get(field) for field in context_fields)]
     lines=["# Results measured in this testbed", "",f"Preserved input runs: {len(records)}. Read errors: {len(errors)}.","",
-           "Table I. Run outcomes with Wilson 95% intervals (authors’ work). Each row is a separate experimental stratum.","",
-           "| Collection | Agent mode | Phase | Scenario | Condition | Lifetime s | Revocation | Outcomes/n | Wilson interval |",
-           "| --- | --- | --- | --- | --- | ---: | --- | ---: | --- |"]
+           "Collection and model context (dates derived from preserved run timestamps):","",*sum(([line,""] for line in context_lines),[]),
+           "Table I. Run outcomes with Wilson 95% intervals (authors’ work). Context keys preserve collection/model/date; approval subgroups are separate experimental strata.","",
+           "| Context | Scenario | Condition | Lifetime s | Revocation | Approval subgroup | Outcomes/n | Wilson interval |",
+           "| --- | --- | --- | ---: | --- | --- | ---: | --- |"]
     for r in tables:
         v=r["unauthorized_outcome"]
         interval=f'{v["ci_low"]:.1%}–{v["ci_high"]:.1%}' if v["n"] else "Not measured"
-        lines.append(f'| {r["collection_id"]} | {r["mode"]} | {r["phase"]} | {r["scenario"]} | {r["condition"]} | {r["ttl_seconds"]} | {r["revocation_mode"]} | {v["successes"]}/{v["n"]} | {interval} |')
+        lines.append(f'| {context_for(r)} | {r["scenario"]} | {r["condition"]} | {r["ttl_seconds"]} | {r["revocation_mode"]} | {approval_label(r)} | {v["successes"]}/{v["n"]} | {interval} |')
     lines.extend(["","Inference is restricted to this single-machine testbed, these payloads and the recorded model/date. Configuration-guaranteed denials and tamper checks are sanity checks. Scripted runs do not establish real-LLM findings.","",
                   "Comparisons are in comparisons.csv, including missing contrasts, exact test names, right-minus-left effects, deterministic bootstrap intervals and Holm-adjusted p-values. hypothesis-assessment.json maps each planned contrast to its hypothesis and requires a complete frozen real-LLM study, adjusted significance and the prespecified practical difference. Engineering/pilot comparisons remain descriptive.","",
                   "Replay times remain censored where validity outlasted observation. No mean or ordinary median is computed for those times. Kaplan–Meier curves use first observed denial and must be interpreted at the recorded probe resolution."])
     supplemental=[r for r in tables if r["intent_violating_outcome"]["n"]]
     if supplemental:
         lines.extend(["","Table II. Supplemental intent violations on approval-dependent S5 payloads (authors’ work). This does not replace the primary chained-total outcome.","",
-                      "| Collection | Mode | Phase | Condition | Intent violations/n | Wilson 95% interval |","| --- | --- | --- | --- | ---: | --- |"])
+                      "| Context | Scenario | Condition | Lifetime s | Revocation | Approval subgroup | Intent violations/n | Wilson 95% interval |","| --- | --- | --- | ---: | --- | --- | ---: | --- |"])
         for r in supplemental:
             v=r["intent_violating_outcome"]
-            lines.append(f'| {r["collection_id"]} | {r["mode"]} | {r["phase"]} | {r["condition"]} | {v["successes"]}/{v["n"]} | {v["ci_low"]:.1%}–{v["ci_high"]:.1%} |')
+            lines.append(f'| {context_for(r)} | {r["scenario"]} | {r["condition"]} | {r["ttl_seconds"]} | {r["revocation_mode"]} | {approval_label(r)} | {v["successes"]}/{v["n"]} | {v["ci_low"]:.1%}–{v["ci_high"]:.1%} |')
         lines.extend(["","A rubber-stamp approver can permit intent-violating payments within a workflow budget while the workflow counter still prevents the >total chained goal. A null primary H2c/S5 contrast must remain null; supplemental intent effects do not change its definition."])
+    s1_rows=[r for r in tables if r["scenario"]=="S1"]
+    if s1_rows:
+        caption="Table III." if supplemental else "Table II."
+        lines.extend(["",caption+" Descriptive S1 action timing measured in this testbed (authors’ work). Statistics first summarize calls within each run, then describe those run statistics; all timing values are milliseconds.","",
+                      "| Context | Condition | Within-run statistic | Runs | Across-run median ms | Across-run Q1–Q3 ms | Across-run p95 ms |",
+                      "| --- | --- | --- | ---: | ---: | --- | ---: |"])
+        number=lambda value:"Not measured" if value is None else f"{value:.3f}"
+        for row in s1_rows:
+            for metric,label in (("run_median_latency_ms","Action latency median"),("run_p95_latency_ms","Action latency call p95"),
+                                 ("run_median_authorization_ms","Authorization median"),("run_p95_authorization_ms","Authorization call p95")):
+                value=row[metric]
+                lines.append(f'| {context_for(row)} | {row["condition"]} | {label} | {value["n"]} | {number(value["median"])} | {number(value["q1"])}–{number(value["q3"])} | {number(value["p95"])} |')
+        lines.extend(["","The per-run call p95 values and their call counts are preserved in run-latency-percentiles.csv. Across-run p95 of run medians and across-run p95 of per-run call p95 values are different measurements. No calls are treated as independent experimental replicates; these additional tail summaries are descriptive H4 costs only."])
     (output/"results.md").write_text('\n'.join(lines)+'\n',encoding="utf-8")
     return report
 

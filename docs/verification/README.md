@@ -15,3 +15,11 @@ This command performs actual read-only source/image and network checks, real SPI
 `controls.json` records actual concurrent workflow, scope-forgery, duplicate-call, revocation, careful/rubber-stamp approval, and fresh-task isolation checks. `final-live.json` links the pass status of those checks to the source/image check and records namespace retirement. These are engineering checks, kept separate from the pilot and full research results.
 
 Before refreshing evidence, the command retains the preceding snapshot under `history/<verification timestamp>/`. A source/image mismatch is preserved in `source-image.json` and `final-live.json`, and stops the live control tests until the deployment matches the intended source.
+
+To compare the final pilot's preserved runtime source with the current checkout, run:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.verify_pilot_source --pilot results/pilot-002 --output docs/verification/pilot-source-match.json
+```
+
+This compares SHA-256 hashes of exact bytes in the pilot manifest, its preserved source copy, and the current source. It covers experiment runtime, policies, topology, locked dependencies, and the identity/tool-evidence helpers. The host-only freeze utility and analysis/dashboard presentation are excluded from this specific comparison and are bound separately by the full-study freeze.

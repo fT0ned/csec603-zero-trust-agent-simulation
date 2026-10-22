@@ -80,7 +80,7 @@ class EvidenceAnalysisTests(unittest.TestCase):
             self.assertEqual(report["runs"],3)
             self.assertEqual(len(report["tables"]),3)
             self.assertTrue(all(len(r["sha256"])==64 for r in report["sources"]))
-            self.assertEqual(len(list(output.glob("*.csv"))),5)
+            self.assertEqual(len(list(output.glob("*.csv"))),6)
             self.assertTrue((output/"unauthorized-outcomes.svg").is_file())
             self.assertTrue((output/"replay-survival.svg").is_file())
             self.assertEqual(len(list(root.rglob("summary.json"))),3)
@@ -228,6 +228,19 @@ class EvidenceAnalysisTests(unittest.TestCase):
         b={**a,"probe_interval_seconds":1.0,"s3_probe_interval_seconds":10.0,"observation_seconds":3690.0,"budget_usd":4.0}
         self.assertEqual(config_fingerprint(a),config_fingerprint(b))
         self.assertNotEqual(config_fingerprint(a),config_fingerprint({**b,"observation_margin_seconds":5}))
+
+    def test_call_p95_is_per_run_and_descriptive_without_pseudoreplication(self):
+        left=self.record(latencies_ms=[0,100],authorization_ms=[2,12])
+        right=self.record(latencies_ms=[100,200],authorization_ms=[12,22])
+        self.assertEqual(left["run_median_latency_ms"],50)
+        self.assertEqual(left["run_p95_latency_ms"],95)
+        self.assertEqual(left["latency_action_samples"],2)
+        self.assertAlmostEqual(left["run_p95_authorization_ms"],11.5)
+        rows,_,_=summarize([left,right])
+        self.assertEqual(rows[0]["run_p95_latency_ms"]["n"],2)
+        self.assertEqual(rows[0]["run_p95_latency_ms"]["median"],145)
+        self.assertNotEqual(rows[0]["run_p95_latency_ms"]["median"],rows[0]["run_median_latency_ms"]["median"])
+        self.assertFalse(any(row["metric"].startswith("run_p95") for row in compare([left,right],100)))
 
     def test_parent_directory_keeps_collections_separate_and_ids_portable(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -30,7 +30,7 @@ from starlette.background import BackgroundTask
 
 REPO = Path(__file__).resolve().parents[1]
 STATIC = Path(__file__).parent / "static"
-ALLOWED_SUFFIXES = {".json", ".jsonl", ".gz", ".csv", ".svg", ".png", ".jpg", ".jpeg", ".md", ".txt", ".log", ".rego", ".yaml", ".yml", ".toml", ".py", ".html", ".css", ".js", ".ps1", ".sh", ".conf"}
+ALLOWED_SUFFIXES = {".json", ".jsonl", ".gz", ".csv", ".svg", ".png", ".jpg", ".jpeg", ".md", ".mmd", ".txt", ".log", ".rego", ".yaml", ".yml", ".toml", ".py", ".html", ".css", ".js", ".ps1", ".sh", ".conf"}
 TERMINAL = {"completed", "failed", "cancelled", "interrupted"}
 
 
@@ -87,19 +87,26 @@ class ExperimentConfig(BaseModel):
         return self
 
 
-def redact(value):
+SECRET_ENV_PATTERN = re.compile(r"API_KEY|SECRET|TOKEN|PASSWORD", re.I)
+SECRET_FIELD_PATTERN = re.compile(r"(^|_)(api_key|secret|password|authorization|access_token|jwt|credential|token)$", re.I)
+API_KEY_PATTERN = re.compile(r"\bsk-[A-Za-z0-9_-]{12,}")
+JWT_PATTERN = re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
+
+
+def redact(value, secret_values=None):
     """Sanitize exports, never the preserved evidence source."""
+    if secret_values is None:
+        secret_values = tuple(secret for key, secret in os.environ.items() if SECRET_ENV_PATTERN.search(key) and len(secret) >= 12)
     if isinstance(value, dict):
-        return {k: ("[REDACTED]" if re.search(r"(^|_)(api_key|secret|password|authorization|access_token|jwt|credential|token)$", k, re.I) else redact(v)) for k, v in value.items()}
+        return {k: ("[REDACTED]" if SECRET_FIELD_PATTERN.search(k) else redact(v, secret_values)) for k, v in value.items()}
     if isinstance(value, list):
-        return [redact(v) for v in value]
+        return [redact(v, secret_values) for v in value]
     if not isinstance(value, str):
         return value
-    for key, secret in os.environ.items():
-        if re.search(r"API_KEY|SECRET|TOKEN|PASSWORD", key, re.I) and len(secret) >= 12:
-            value = value.replace(secret, "[REDACTED]")
-    value = re.sub(r"\bsk-[A-Za-z0-9_-]{12,}", "[REDACTED_API_KEY]", value)
-    value = re.sub(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+", "[REDACTED_JWT]", value)
+    for secret in secret_values:
+        value = value.replace(secret, "[REDACTED]")
+    value = API_KEY_PATTERN.sub("[REDACTED_API_KEY]", value)
+    value = JWT_PATTERN.sub("[REDACTED_JWT]", value)
     return value
 
 
@@ -107,7 +114,7 @@ def safe_file(root: Path, relative: str) -> Path:
     candidate = (root / relative).resolve()
     if not candidate.is_relative_to(root.resolve()) or not candidate.is_file():
         raise HTTPException(404, "File not found")
-    if candidate.suffix not in ALLOWED_SUFFIXES or any(x.startswith(".") for x in candidate.relative_to(root.resolve()).parts):
+    if (candidate.suffix not in ALLOWED_SUFFIXES and candidate.name != "Dockerfile") or any(x.startswith(".") for x in candidate.relative_to(root.resolve()).parts):
         raise HTTPException(404, "File not exportable")
     if candidate.suffix == ".gz" and not candidate.name.endswith(".jsonl.gz"):
         raise HTTPException(404, "Only compressed JSONL evidence is exportable")
@@ -120,9 +127,17 @@ def sanitized_bytes(path: Path) -> bytes:
     content = path.read_bytes().decode("utf-8", errors="replace")
     try:
         if path.suffix == ".json":
-            return json.dumps(redact(json.loads(content)), indent=2, ensure_ascii=False).encode()
+            original = json.loads(content)
+            sanitized = redact(original)
+            if sanitized == original:
+                return content.encode("utf-8")
+            return json.dumps(sanitized, indent=2, ensure_ascii=False).encode()
         if path.suffix == ".jsonl":
-            return ("\n".join(json.dumps(redact(json.loads(line)), ensure_ascii=False) for line in content.splitlines() if line.strip()) + "\n").encode()
+            original = [json.loads(line) for line in content.splitlines() if line.strip()]
+            sanitized = redact(original)
+            if sanitized == original:
+                return content.encode("utf-8")
+            return ("\n".join(json.dumps(line, ensure_ascii=False) for line in sanitized) + "\n").encode()
     except (ValueError, TypeError):
         pass
     return redact(content).encode("utf-8")

@@ -39,6 +39,9 @@ def test_complete_workflow_preserves_raw_and_exports_redacted_bundle(console, mo
     (repo / "testbed").mkdir()
     (repo / "testbed" / "version.py").write_text('VERSION = "export-time"')
     (repo / "README.md").write_text("Export-time additional instructions")
+    (repo / "Dockerfile").write_bytes(b"FROM export-time\n")
+    (repo / "docs" / "figures").mkdir(parents=True)
+    (repo / "docs" / "figures" / "deployed-architecture.mmd").write_bytes(b"flowchart LR\n  agent --> gateway\n")
 
     def command(job, args, log):
         root = manager.root / job["id"]
@@ -52,6 +55,9 @@ def test_complete_workflow_preserves_raw_and_exports_redacted_bundle(console, mo
                 compressed.write(json.dumps({"action": "email.send", "credential": "disposable-bearer-never-export", "api_key": secret}) + "\n")
             (root / "source" / "testbed").mkdir(parents=True)
             (root / "source" / "testbed" / "version.py").write_bytes(b'VERSION = "collection-time"\r\n')
+            (root / "source" / "configs").mkdir()
+            (root / "source" / "configs" / "example.json").write_bytes(b'{"sample": true}\r\n')
+            (root / "source" / "Dockerfile").write_bytes(b"FROM collection-time\r\n")
             log.write(b"runner executed\n")
         else:
             (root / "analysis").mkdir()
@@ -84,6 +90,10 @@ def test_complete_workflow_preserves_raw_and_exports_redacted_bundle(console, mo
         assert "results/analysis/rates.csv" in archive.namelist()
         assert all(secret.encode() not in archive.read(name) for name in archive.namelist())
         assert archive.read("source/testbed/version.py") == b'VERSION = "collection-time"\r\n'
+        assert archive.read("source/configs/example.json") == b'{"sample": true}\r\n'
+        assert archive.read("source/Dockerfile") == b"FROM collection-time\r\n"
+        assert "export-time-extras/Dockerfile" not in archive.namelist()
+        assert archive.read("export-time-extras/docs/figures/deployed-architecture.mmd") == b"flowchart LR\n  agent --> gateway\n"
         assert "export-time-extras/README.md" in archive.namelist()
         decoded_member = gzip.decompress(archive.read("results/runs/trial-001/audit-0001.jsonl.gz"))
         assert secret.encode() not in decoded_member

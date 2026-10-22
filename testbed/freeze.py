@@ -46,9 +46,18 @@ def approve(pilot,study):
             if abs(row.get('theft_schedule_error_seconds',float('inf')))>1:raise ValueError('Pilot theft handoff schedule invalid')
             if row['scenario']=='S4' and row['revocation_mode']=='now' and not row.get('event_observed'):raise ValueError('Pilot immediate revocation lacks observed denial')
             if row['condition']!='C0' and not row.get('event_observed'):raise ValueError('Pilot credential expiration lacks observed denial')
+    from scripts.verify_pilot_source import verify as verify_pilot_source
+    runtime_match=verify_pilot_source(pilot)
+    if not runtime_match['passed']:raise ValueError('Experiment runtime differs from validated pilot bytes')
     mean=sum(r['cost_usd'] for r in successful)/len(successful)
     projected=mean*len(manifest(config))*1.5
-    if config.get('budget_usd',0)<projected: raise ValueError('Batch budget does not cover pilot projected cost plus50percent reserve')
+    from .agent import Budget
+    from contextlib import closing
+    import sqlite3
+    budget=Budget(config.get('budget_usd',0))
+    with closing(sqlite3.connect(budget.path)) as ledger:
+        already_used=ledger.execute('SELECT coalesce(sum(coalesce(actual,reserved)),0) FROM spend').fetchone()[0]
+    if budget.limit-already_used<projected:raise ValueError('Remaining aggregate budget does not cover projected cost plus50percent reserve')
     # Freeze only committed reviewable code. Do not silently bless a dirty working tree.
     dirty=subprocess.check_output(['git','status','--porcelain'],cwd=ROOT,text=True)
     if dirty.strip(): raise ValueError('Commit/push source and pilot evidence before freeze; working tree must be clean')
@@ -60,8 +69,10 @@ def approve(pilot,study):
         for path in (ROOT/directory).rglob('*'):
             if path.is_file() and '__pycache__' not in path.parts and path.name!='freeze.json':
                 files[str(path.relative_to(ROOT)).replace('\\','/')]=digest(path.read_text(encoding='utf-8'))
-    freeze={'status':'approved','tag':'study-freeze-v1','approved_at':time.time(),'repeats':config['repeats'],'pilot':str(pilot.relative_to(ROOT)),
-      'pilot_runs':len(successful),'pilot_manifest_sha256':digest(pilot_manifest),'pilot_raw_verified_files':verification['files_checked'],'pilot_mean_cost_usd':mean,'projected_study_cost_usd_with_reserve':projected,
+    for name in ['scripts/spire.py','scripts/tool_evidence.py','compose.yaml','Dockerfile','requirements.txt','requirements.lock.txt']:
+        files[name]=digest((ROOT/name).read_text(encoding='utf-8'))
+    freeze={'status':'approved' ,'tag':'study-freeze-v1','approved_at':time.time(),'repeats':config['repeats'],'pilot':str(pilot.relative_to(ROOT)),
+      'pilot_runtime_byte_match_files':runtime_match['matched_file_count'],'aggregate_spend_before_full_usd':already_used,'remaining_aggregate_budget_usd':budget.limit-already_used,'pilot_runs':len(successful),'pilot_manifest_sha256':digest(pilot_manifest),'pilot_raw_verified_files':verification['files_checked'],'pilot_mean_cost_usd':mean,'projected_study_cost_usd_with_reserve':projected,
       'study_config_sha256':config_fingerprint(config),'file_hashes':files,
       'source_commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
       'analysis_plan_sha256':digest((ROOT/'docs/analysis-plan.md').read_text(encoding='utf-8')),
