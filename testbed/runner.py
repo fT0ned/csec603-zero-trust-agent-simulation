@@ -203,11 +203,8 @@ def run_one(cell, config, batch):
             baseline=invoke({'action':'files.read','params':{'path':'brief'}},'attacker','impersonation')
             if baseline['outcome']!='executed': raise RuntimeError('Credential not valid at observation start')
             last_success=time.monotonic()-theft
-            revoke_at=time.time() if cell['scenario']=='S4' else None
-            summary['security_decision_at']=revoke_at
-            if cell['scenario']=='S4' and cell['revocation_mode']=='now':
-                revoked=admin_post('/control/'+run_id+'/revoke')
-                summary['revocation_propagation_ms']=(revoked['active_at']-revoke_at)*1000
+            revoke_at=None
+            summary['security_decision_at']=None
             window=min(config.get('observation_seconds',2),cell['ttl_seconds']+config.get('observation_margin_seconds',5)) if config['phase']!='engineering' else config.get('observation_seconds',2)
             interval=config.get('s3_probe_interval_seconds',config.get('probe_interval_seconds',.1)) if cell['scenario']=='S3' else config.get('probe_interval_seconds',.1)
             stream_request={'url':'http://gateway:8000/tool','token':token,
@@ -228,6 +225,13 @@ def run_one(cell, config, batch):
                 else:
                     first_denial=elapsed
                     if revoke_at: summary['revocation_to_denial_ms']=(observed['time']-revoke_at)*1000
+                # Start the security decision only after the scheduled client is running and has proved validity.
+                if cell['scenario']=='S4' and revoke_at is None:
+                    if not valid: raise RuntimeError('Credential expired before the scheduled security decision')
+                    revoke_at=time.time();summary['security_decision_at']=revoke_at
+                    if cell['revocation_mode']=='now':
+                        revoked=admin_post('/control/'+run_id+'/revoke')
+                        summary['revocation_propagation_ms']=(revoked['active_at']-revoke_at)*1000
             process.wait(timeout=60)
             if process.returncode: raise RuntimeError('Probe client failed: '+process.stderr.read()[-1000:])
             summary.update(exposure_seconds=last_success,last_success_seconds=last_success,first_denial_seconds=first_denial,

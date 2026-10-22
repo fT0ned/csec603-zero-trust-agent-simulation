@@ -18,6 +18,7 @@ OPA = os.getenv('OPA_URL', 'http://opa:8181/v1/data/csec603/decision')
 STATE = Path(os.getenv('STATE_DIR', '/state'))
 RUNS = {}
 LOCKS = {}
+DENY_IDS = set()
 HTTP = httpx.AsyncClient(timeout=30, trust_env=False)
 app = FastAPI(title='Testbed ' + ROLE)
 
@@ -42,7 +43,7 @@ async def remote(path, data):
 
 @app.get('/health')
 def health():
-    return {'status': 'ok', 'role': ROLE, 'active_runs': len(RUNS), 'time': time.time()}
+    return {'status': 'ok', 'role': ROLE, 'active_runs': len(RUNS), 'revoked_credentials':len(DENY_IDS), 'time': time.time()}
 
 @app.get('/whoami')
 def whoami(request: Request):
@@ -73,7 +74,20 @@ async def revoke(run_id: str, request: Request):
     async with LOCKS[run_id]:
         state['revoked'] = True
         state['grants'].clear()
-        return {'active_at': time.time(), 'credential_id': state['credential_id']}
+        recorded=time.time()
+        response=await HTTP.post(os.getenv('GATEWAY_URL','http://gateway:8000')+'/internal/revoke',
+            json={'credential_id':state['credential_id']},headers={'x-admin-secret':ADMIN})
+        response.raise_for_status()
+        return {**response.json(),'pa_recorded_at':recorded,'credential_id':state['credential_id']}
+
+@app.post('/internal/revoke')
+async def gateway_revoke(request:Request):
+    admin(request)
+    if ROLE!='gateway':raise HTTPException(404)
+    data=await request.json();credential_id=data.get('credential_id','')
+    if len(credential_id)!=64 or any(ch not in '0123456789abcdef' for ch in credential_id):raise HTTPException(422,'Credential digest required')
+    DENY_IDS.add(credential_id)
+    return {'active_at':time.time(),'credential_id':credential_id,'enforcement_point':'gateway deny-list'}
 
 @app.post('/control/{run_id}/suspend')
 async def suspend(run_id: str, request: Request):
@@ -131,7 +145,7 @@ async def tool(request: Request):
     try: validate_action(data.get('action'), data.get('params'))
     except ValueError as e: raise HTTPException(422, str(e))
     token = request.headers.get('authorization', '').removeprefix('Bearer ')
-    auth = await remote('/control/validate', {'run_id': data.get('run_id'), 'token': token})
+    auth = {'valid':False,'reason':'revoked'} if digest(token) in DENY_IDS else await remote('/control/validate', {'run_id': data.get('run_id'), 'token': token})
     # Origin is the socket peer, never any caller-supplied header/body metadata.
     data['origin'] = request.client.host
     data['credential_valid'] = auth['valid']; data['credential_reason'] = auth['reason']

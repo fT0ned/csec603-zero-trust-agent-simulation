@@ -1,0 +1,152 @@
+name: csec603-testbed
+x-app: &app
+  build: .
+  image: csec603-testbed:local
+  init: true
+  restart: unless-stopped
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  healthcheck:
+    test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+    interval: 5s
+    timeout: 3s
+    retries: 12
+services:
+  spire-server:
+    image: ghcr.io/spiffe/spire-server:1.14.1@sha256:46a740705d5e15839552b1307aff44ef5ac42d9b444d073b4ccefd87c5269283
+    command: [-config, /opt/spire/conf/server.conf]
+    volumes:
+      - ./infra/spire/server.conf:/opt/spire/conf/server.conf:ro
+      - spire-server-data:/var/lib/spire/server
+    networks: [identity]
+    healthcheck:
+      test: [CMD, /opt/spire/bin/spire-server, healthcheck, -socketPath, /run/spire/server/api.sock]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+  spire-agent:
+    image: ghcr.io/spiffe/spire-agent:1.14.1@sha256:7bb8469af28f00908a96a8a51fb36cbbcdfb85efe78e94b492f949f33284bf4d
+    command: [-config, /opt/spire/conf/agent.conf]
+    pid: host
+    volumes:
+      - ./infra/spire/agent.conf:/opt/spire/conf/agent.conf:ro
+      - ./.runtime/bootstrap:/bootstrap:ro
+      - spire-agent-data:/var/lib/spire/agent
+      - workload-socket:/run/spire/sockets
+    networks: [identity]
+    depends_on:
+      spire-server: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, /opt/spire/bin/spire-agent, healthcheck, -socketPath, /run/spire/sockets/agent.sock]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+  opa:
+    image: openpolicyagent/opa:1.10.1-static@sha256:e1f196b5316301785d5251543c9d0f3f6c83ce6ac23263b494730427fa80e248
+    command: [run, --server, --addr=0.0.0.0:8181, /policies]
+    volumes: [./infra/opa:/policies:ro]
+    networks: [control]
+    healthcheck:
+      test: [CMD, /opa, eval, --fail, 'http.send({"method":"get","url":"http://127.0.0.1:8181/health"}).status_code == 200']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+  pa:
+    <<: *app
+    environment:
+      SERVICE_ROLE: pa
+      OPA_URL: http://opa:8181/v1/data/csec603/decision
+      FILES_URL: http://files:8000
+      EMAIL_URL: http://email:8000
+      CRM_URL: http://crm:8000
+      PAYMENTS_URL: http://payments:8000
+      TOOL_URLS: '{"files":"http://files:8000","email":"http://email:8000","crm":"http://crm:8000","payments":"http://payments:8000"}'
+      STATE_DIR: /state
+    env_file: [.runtime/control.env]
+    volumes: [pa-state:/state]
+    ports: [127.0.0.1:8767:8000]
+    networks: [control, tools, admin]
+    depends_on:
+      opa: {condition: service_healthy}
+      files: {condition: service_healthy}
+      email: {condition: service_healthy}
+      crm: {condition: service_healthy}
+      payments: {condition: service_healthy}
+  gateway:
+    <<: *app
+    environment:
+      SERVICE_ROLE: gateway
+      PA_URL: http://pa:8000
+      STATE_DIR: /state
+    env_file: [.runtime/control.env]
+    volumes: [gateway-state:/state]
+    ports: [127.0.0.1:8766:8000]
+    networks: [front, control]
+    depends_on:
+      pa: {condition: service_healthy}
+  files:
+    <<: *app
+    command: [python, -m, infra.tools]
+    environment: {TOOL_KIND: files, STATE_DIR: /state}
+    volumes: [files-state:/state]
+    networks: [tools]
+  email:
+    <<: *app
+    command: [python, -m, infra.tools]
+    environment: {TOOL_KIND: email, STATE_DIR: /state}
+    volumes: [email-state:/state]
+    networks: [tools]
+  crm:
+    <<: *app
+    command: [python, -m, infra.tools]
+    environment: {TOOL_KIND: crm, STATE_DIR: /state}
+    volumes: [crm-state:/state]
+    networks: [tools]
+  payments:
+    <<: *app
+    command: [python, -m, infra.tools]
+    environment: {TOOL_KIND: payments, STATE_DIR: /state}
+    volumes: [payments-state:/state]
+    networks: [tools]
+  agent-client:
+    <<: *app
+    command: [python, -c, "import time; time.sleep(2147483647)"]
+    user: '10001:10001'
+    volumes: [workload-socket:/run/spire/sockets:ro]
+    networks: [front]
+    healthcheck:
+      test: [CMD, python, -c, "import socket; socket.create_connection(('gateway',8000),2).close()"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      gateway: {condition: service_healthy}
+      spire-agent: {condition: service_healthy}
+  attacker:
+    <<: *app
+    command: [python, -c, "import time; time.sleep(2147483647)"]
+    user: '10002:10002'
+    networks: [front]
+    healthcheck:
+      test: [CMD, python, -c, "import socket; socket.create_connection(('gateway',8000),2).close()"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      gateway: {condition: service_healthy}
+networks:
+  front: {}
+  control: {internal: true}
+  tools: {internal: true}
+  identity: {internal: true}
+  admin: {}
+volumes:
+  spire-server-data: {}
+  spire-agent-data: {}
+  workload-socket: {}
+  pa-state: {}
+  gateway-state: {}
+  files-state: {}
+  email-state: {}
+  crm-state: {}
+  payments-state: {}
