@@ -20,3 +20,5 @@ Batches launched from the command line are discovered from their existing manife
 ## Browser and API verification
 
 `python -m pytest tests/test_dashboard.py -q` verifies the collection/analysis lifecycle, retained raw evidence, sanitized export bundle, path/host/origin boundaries, uncredentialed and unfrozen-study rejection, cancellation, single-active-batch handling, and restart recovery. These tests substitute a local runner fixture to isolate dashboard behavior; they do not establish security-control or LLM research findings. The repository handoff records the separate browser-to-real-testbed verification.
+
+Replay handoff timing uses the configured `theft_delay_seconds` (default 120 seconds, allowed range 1–1800 seconds), measured from credential receipt rather than variable model completion. Load the repository preset to use the frozen study timing and concurrency; review these fields before collection.

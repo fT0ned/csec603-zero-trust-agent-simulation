@@ -20,7 +20,7 @@ from .statistics import (bootstrap_difference, cluster_ratio, describe, fisher_e
 
 CONDITIONS = ("C0", "C1", "C2", "C2-noWF", "C2-RS")
 PAIRS = (("C0","C1"),("C1","C2"),("C0","C2"),("C2","C2-noWF"),("C2","C2-RS"))
-STRATA = ("mode", "phase", "model", "model_snapshot", "scenario", "ttl_seconds",
+STRATA = ("collection_id", "mode", "phase", "model", "model_snapshot", "scenario", "ttl_seconds",
           "revocation_mode", "approval_dependent")
 TIME_METRICS = ("run_median_latency_ms", "run_median_authorization_ms", "reachable_authority",
                 "cumulative_ratio", "approval_count", "approval_delay_ms",
@@ -95,8 +95,10 @@ def revocation_observation(run):
 
 
 def load_runs(root):
-    paths = sorted(Path(root).rglob("summary.json"))
+    root=Path(root).resolve()
+    paths = sorted(root.rglob("summary.json"))
     records,sources,errors = [],[],[]
+    collections={}
     for path in paths:
         try:
             data = path.read_bytes()
@@ -104,10 +106,27 @@ def load_runs(root):
             if not isinstance(raw,dict) or "condition" not in raw or "scenario" not in raw:
                 continue
             run = normalize(raw)
+            # Infer the trusted collection boundary from preserved batch files,
+            # never pool separate collections because their phase/model agree.
+            batch=next((parent for parent in path.parents if parent.is_relative_to(root)
+                        and (parent/"manifest.json").is_file() and (parent/"config.json").is_file()),None)
+            if batch not in collections:
+                if batch is None:
+                    collections[batch]={"collection_id":"unbound-root","collection_root":str(root),
+                                        "collection_manifest_sha256":None,"collection_config_sha256":None}
+                else:
+                    manifest=(batch/"manifest.json").read_bytes();config=(batch/"config.json").read_bytes()
+                    collection_name=json.loads(manifest).get("collection_name")
+                    prefix=collection_name if isinstance(collection_name,str) and collection_name else "collection"
+                    identifier=prefix+"-"+hashlib.sha256(manifest+b'\0'+config).hexdigest()[:12]
+                    collections[batch]={"collection_id":identifier,"collection_root":str(batch),
+                                        "collection_manifest_sha256":hashlib.sha256(manifest).hexdigest(),
+                                        "collection_config_sha256":hashlib.sha256(config).hexdigest()}
+            run.update(collections[batch])
             run["source_path"] = str(path.resolve())
             run["source_sha256"] = hashlib.sha256(data).hexdigest()
             records.append(run)
-            sources.append({"path":str(path.resolve()),"sha256":run["source_sha256"]})
+            sources.append({"path":str(path.resolve()),"sha256":run["source_sha256"],**collections[batch]})
         except (OSError,ValueError,TypeError) as exc:
             errors.append({"path":str(path),"error":str(exc)})
     # A completed replacement of an infrastructure failure counts once. Keep
@@ -116,7 +135,7 @@ def load_runs(root):
     terminal=defaultdict(list)
     for run in records:
         if run.get("status") in INFRA_FAILURES|PENDING_STATUSES or run.get("pair_id") is None:continue
-        unit=tuple(run.get(x) for x in ("mode","phase","model","condition","scenario","ttl_seconds","revocation_mode","seed","pair_id","payload_id"))
+        unit=tuple(run.get(x) for x in ("collection_id","mode","phase","model","condition","scenario","ttl_seconds","revocation_mode","seed","pair_id","payload_id"))
         terminal[unit].append(run)
     for runs in terminal.values():
         ordered=sorted(runs,key=lambda r:(r.get("metadata",{}).get("started_at") if finite_number(r.get("metadata",{}).get("started_at")) else float("inf"),r.get("run_id",r["source_path"])))
@@ -290,7 +309,7 @@ def compare(records,bootstrap_samples=2000):
     families=defaultdict(list)
     for i,row in enumerate(output):
         row["inferential_role"]="supplemental" if row["metric"]=="intent_violating_outcome" else "planned"
-        families[tuple(row[x] for x in ("mode","phase","model","model_snapshot"))+(row["inferential_role"],)].append(i)
+        families[tuple(row[x] for x in ("collection_id","mode","phase","model","model_snapshot"))+(row["inferential_role"],)].append(i)
     for family,indices in families.items():
         adjusted=holm([output[i]["p_value"] for i in indices])
         for i,p in zip(indices,adjusted):
@@ -330,7 +349,7 @@ def plot_rates(path,rows):
         parts.append('<text x="24" y="90">Not measured. No eligible attack-run outcomes are present.</text>')
     for i,row in enumerate(measured):
         y=85+i*38;r=row["unauthorized_outcome"]
-        label=" | ".join(str(row.get(x,"")) for x in ("mode","phase","scenario","condition","ttl_seconds","revocation_mode","approval_dependent"))
+        label=" | ".join(str(row.get(x,"")) for x in ("collection_id","mode","phase","scenario","condition","ttl_seconds","revocation_mode","approval_dependent"))
         parts.append(f'<text x="24" y="{y+4}">{html.escape(label)}</text>')
         x=lambda p:760+280*p
         parts.extend([f'<line x1="{x(r["ci_low"])}" y1="{y}" x2="{x(r["ci_high"])}" y2="{y}" stroke="#2458a6" stroke-width="3"/>',
@@ -351,8 +370,11 @@ def plot_survival(path,rows):
     max_time=max((r["time"] for r in rows),default=1) or 1
     for i,(labels,curve) in enumerate(groups.items()):
         y=80+i*34
-        label=" | ".join(str(x) for x in labels)
-        p.append(f'<text x="20" y="{y+12}">{html.escape(label)}</text>')
+        fields=dict(zip(STRATA+("condition",),labels))
+        label=" | ".join(str(fields.get(x,"")) for x in ("collection_id","mode","phase","model"))
+        detail=" | ".join(str(fields.get(x,"")) for x in ("scenario","condition","ttl_seconds","revocation_mode","approval_dependent"))
+        p.append(f'<text x="20" y="{y+8}">{html.escape(label)}</text>')
+        p.append(f'<text x="20" y="{y+23}">{html.escape(detail)}</text>')
         points=[];last=1.
         for point in curve:
             x=760+280*point["time"]/max_time
@@ -391,22 +413,22 @@ def analyze(root,output=None,bootstrap_samples=2000):
     plot_survival(output/"replay-survival.svg",survival)
     lines=["# Results measured in this testbed", "",f"Preserved input runs: {len(records)}. Read errors: {len(errors)}.","",
            "Table I. Run outcomes with Wilson 95% intervals (authors’ work). Each row is a separate experimental stratum.","",
-           "| Agent mode | Phase | Scenario | Condition | Lifetime s | Revocation | Outcomes/n | Wilson interval |",
-           "| --- | --- | --- | --- | ---: | --- | ---: | --- |"]
+           "| Collection | Agent mode | Phase | Scenario | Condition | Lifetime s | Revocation | Outcomes/n | Wilson interval |",
+           "| --- | --- | --- | --- | --- | ---: | --- | ---: | --- |"]
     for r in tables:
         v=r["unauthorized_outcome"]
         interval=f'{v["ci_low"]:.1%}–{v["ci_high"]:.1%}' if v["n"] else "Not measured"
-        lines.append(f'| {r["mode"]} | {r["phase"]} | {r["scenario"]} | {r["condition"]} | {r["ttl_seconds"]} | {r["revocation_mode"]} | {v["successes"]}/{v["n"]} | {interval} |')
+        lines.append(f'| {r["collection_id"]} | {r["mode"]} | {r["phase"]} | {r["scenario"]} | {r["condition"]} | {r["ttl_seconds"]} | {r["revocation_mode"]} | {v["successes"]}/{v["n"]} | {interval} |')
     lines.extend(["","Inference is restricted to this single-machine testbed, these payloads and the recorded model/date. Configuration-guaranteed denials and tamper checks are sanity checks. Scripted runs do not establish real-LLM findings.","",
                   "Comparisons are in comparisons.csv, including missing contrasts, exact test names, right-minus-left effects, deterministic bootstrap intervals and Holm-adjusted p-values. hypothesis-assessment.json maps each planned contrast to its hypothesis and requires a complete frozen real-LLM study, adjusted significance and the prespecified practical difference. Engineering/pilot comparisons remain descriptive.","",
                   "Replay times remain censored where validity outlasted observation. No mean or ordinary median is computed for those times. Kaplan–Meier curves use first observed denial and must be interpreted at the recorded probe resolution."])
     supplemental=[r for r in tables if r["intent_violating_outcome"]["n"]]
     if supplemental:
         lines.extend(["","Table II. Supplemental intent violations on approval-dependent S5 payloads (authors’ work). This does not replace the primary chained-total outcome.","",
-                      "| Mode | Phase | Condition | Intent violations/n | Wilson 95% interval |","| --- | --- | --- | ---: | --- |"])
+                      "| Collection | Mode | Phase | Condition | Intent violations/n | Wilson 95% interval |","| --- | --- | --- | --- | ---: | --- |"])
         for r in supplemental:
             v=r["intent_violating_outcome"]
-            lines.append(f'| {r["mode"]} | {r["phase"]} | {r["condition"]} | {v["successes"]}/{v["n"]} | {v["ci_low"]:.1%}–{v["ci_high"]:.1%} |')
+            lines.append(f'| {r["collection_id"]} | {r["mode"]} | {r["phase"]} | {r["condition"]} | {v["successes"]}/{v["n"]} | {v["ci_low"]:.1%}–{v["ci_high"]:.1%} |')
         lines.extend(["","A rubber-stamp approver can permit intent-violating payments within a workflow budget while the workflow counter still prevents the >total chained goal. A null primary H2c/S5 contrast must remain null; supplemental intent effects do not change its definition."])
     (output/"results.md").write_text('\n'.join(lines)+'\n',encoding="utf-8")
     return report

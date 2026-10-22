@@ -10,18 +10,21 @@ import concurrent.futures
 import json
 import re
 import subprocess
+import threading
 from typing import Any
 
 from scripts.spire import ROOT
 
 TOOLS = ("files", "email", "crm", "payments")
+_READERS = threading.BoundedSemaphore(8)
 
 
 def _one(tool: str, run_id: str) -> tuple[str, dict[str, Any]]:
     program = "import json,sys,urllib.request; run_id=json.load(sys.stdin)['run_id']; print(urllib.request.urlopen('http://127.0.0.1:8000/evidence/'+run_id,timeout=10).read().decode())"
-    result = subprocess.run(["docker", "compose", "exec", "-T", tool, "python", "-c", program],
-                            input=json.dumps({"run_id": run_id}), cwd=ROOT, capture_output=True,
-                            text=True, timeout=30, check=False)
+    with _READERS:
+        result = subprocess.run(["docker", "compose", "exec", "-T", tool, "python", "-c", program],
+                                input=json.dumps({"run_id": run_id}), cwd=ROOT, capture_output=True,
+                                text=True, timeout=30, check=False)
     if result.returncode:
         raise RuntimeError(f"Independent {tool} evidence could not be collected: {result.stderr[-1000:]}")
     try:

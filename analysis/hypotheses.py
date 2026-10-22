@@ -124,7 +124,13 @@ def judge(row,eligibility,threshold,direction,effect=None,kind="confirmatory"):
     return result
 
 def assess(root,records,comparisons,tables):
-    eligibility=full_study_eligibility(root,records)
+    cohorts=defaultdict(list)
+    for record in records:cohorts[record.get("collection_id") or "unbound-root"].append(record)
+    eligibility_by_collection={identifier:full_study_eligibility(rows[0].get("collection_root",root),rows) for identifier,rows in cohorts.items()}
+    eligibility=next(iter(eligibility_by_collection.values())) if len(eligibility_by_collection)==1 else {
+        "eligible":bool(eligibility_by_collection) and all(v["eligible"] for v in eligibility_by_collection.values()),
+        "failed_checks":["Multiple or absent collections; inspect each collection eligibility"],
+        "note":"No pooling of collections; each comparison is judged against its own preserved freeze."}
     output=[]
     for row in comparisons:
         scenario,metric,pair=row.get("scenario"),row["metric"],(row["left"],row["right"])
@@ -175,7 +181,7 @@ def assess(root,records,comparisons,tables):
                     "left":row["left"],"right":row["right"],"method":row.get("method"),
                     "p_value":row.get("p_value"),"family_size":row.get("family_size"),
                     "expected_n_left":len(left_runs),"expected_n_right":len(right_runs),
-                    **judge(measured_row,eligibility,threshold,direction,effect,kind)}
+                    **judge(measured_row,eligibility_by_collection.get(row.get("collection_id") or "unbound-root",eligibility),threshold,direction,effect,kind)}
         if note:assessment["interpretation_note"]=note
         output.append(assessment)
     sanity=[]
@@ -187,19 +193,20 @@ def assess(root,records,comparisons,tables):
                        "judgment":"Not measured" if not metric.get("denominator") else "Sanity check passed" if metric.get("rate")==1 else "Sanity check failed",
                        "reason":"Verifier behavior on deliberately altered copies; not a security-effectiveness finding"})
     summaries=[]
-    for hypothesis in ("H1","H1b","H2","H2b","H2c","H3","H3b","H4"):
-        relevant=[r for r in output if r["hypothesis"]==hypothesis and r["kind"]=="confirmatory"]
-        counts=Counter(r["judgment"] for r in relevant)
-        if hypothesis=="H3b":status="Sanity check only"
-        elif hypothesis=="H4":status="Descriptive only"
-        elif not relevant or not any(r["judgment"]!="Not measured" for r in relevant):status="Not measured"
-        elif all(r["judgment"]=="Descriptive only" for r in relevant if r["judgment"]!="Not measured"):status="Descriptive only"
-        elif relevant and all(r["judgment"]=="Supported in this testbed" for r in relevant):status="Supported for all planned measured contrasts in this testbed"
-        else:status="Not supported across all required contrasts; inspect per-contrast results"
-        summaries.append({"hypothesis":hypothesis,"judgment":status,"contrast_judgments":dict(counts),
-                          "note":"No pooling of scenarios/lifetimes/approval strata. Mixed, negative and missing contrasts remain visible."})
+    for collection_id in cohorts or {"unbound-root":[]}:
+        for hypothesis in ("H1","H1b","H2","H2b","H2c","H3","H3b","H4"):
+            relevant=[r for r in output if (r.get("collection_id") or "unbound-root")==collection_id and r["hypothesis"]==hypothesis and r["kind"]=="confirmatory"]
+            counts=Counter(r["judgment"] for r in relevant)
+            if hypothesis=="H3b":status="Sanity check only"
+            elif hypothesis=="H4":status="Descriptive only"
+            elif not relevant or not any(r["judgment"]!="Not measured" for r in relevant):status="Not measured"
+            elif all(r["judgment"]=="Descriptive only" for r in relevant if r["judgment"]!="Not measured"):status="Descriptive only"
+            elif relevant and all(r["judgment"]=="Supported in this testbed" for r in relevant):status="Supported for all planned measured contrasts in this testbed"
+            else:status="Not supported across all required contrasts; inspect per-contrast results"
+            summaries.append({"collection_id":collection_id,"hypothesis":hypothesis,"judgment":status,"contrast_judgments":dict(counts),
+                              "note":"No pooling of collections/scenarios/lifetimes/approval strata. Mixed, negative and missing contrasts remain visible."})
     return {"schema_version":1,"alpha":ALPHA,"thresholds":THRESHOLDS,"effect_convention":"Right minus left",
-            "eligibility":eligibility,"hypotheses":summaries,"contrasts":output,"sanity_checks":sanity,
+            "eligibility":eligibility,"eligibility_by_collection":eligibility_by_collection,"hypotheses":summaries,"contrasts":output,"sanity_checks":sanity,
             "unestablished_clauses":["H2: a null C0–C1 coercion contrast does not establish equivalence.",
                                      "H1b: similar revocation behavior across lifetimes is descriptive unless an equivalence margin/test was separately frozen."],
             "limitation":"Support is restricted to the recorded single-machine, single-agent testbed and mutable model alias/date; a null difference does not demonstrate equivalence."}

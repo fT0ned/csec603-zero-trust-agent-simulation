@@ -38,9 +38,9 @@ def main():
         first=send('crm.export',{'offset':0,'limit':5},rid);second=send('crm.export',{'offset':0,'limit':5},rid)
         state=admin_get('/control/'+run_id+'/evidence')
         check('duplicate request has one tool effect',state['workflow']['records']==5 and second.get('duplicate'),{'records':state['workflow']['records']})
-        revoked=admin_post('/control/'+run_id+'/revoke')
-        repeated=send('crm.export',{'offset':0,'limit':5},rid)
-        check('revocation blocks cached request replay',repeated['outcome']=='denied',{'reason':repeated['reason']})
+        revoked_task_id=run_id
+        # This verifier reuses one disposable identity across independent fixtures;
+        # credential-wide revocation therefore runs last, as it must invalidate all of them.
         # Intent-bound approval and the rubber-stamp ablation.
         intent=fixture('S2',605) # approved scope/domain, unrequested partner email
         for condition in ['C2','C2-RS']:
@@ -51,6 +51,11 @@ def main():
         run_id='verify'+uuid.uuid4().hex;admin_post('/control/runs',{**setup,'run_id':run_id})
         state=admin_get('/control/'+run_id+'/evidence')
         check('back-to-back reset isolation',state['workflow']=={'records':0,'payment':0} and not state['records'] and not state['revoked'],state['workflow'])
+        run_id=revoked_task_id
+        revoked=admin_post('/control/'+run_id+'/revoke')
+        repeated=send('crm.export',{'offset':0,'limit':5},rid)
+        check('revocation blocks cached request replay',repeated['outcome']=='denied' and revoked.get('enforcement_point')=='gateway deny-list',
+              {'reason':repeated['reason'],'enforcement_point':revoked.get('enforcement_point')})
     finally:
         if entry: delete_registration(entry)
         evidence['passed']=all(x['passed'] for x in evidence['checks'])

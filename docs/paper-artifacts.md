@@ -9,7 +9,7 @@ This file supplies implementation-to-paper mappings and draft analytical artifac
 | Feedback response matrix | Appendix A mapping below | Add exact manuscript locations and honest completion status |
 | Literature evidence matrix | Retain Report 1 Table I | Add architecture/metric/scenario justification column; independently audit references |
 | Comparative analysis table | Condition table below plus generated metrics/comparisons CSV | Insert measured cells only after collection and manifest verification |
-| Architecture/workflow diagram | Governing diagram and deployed topology | Show identity/delegation paths separately, PE→PA→PEP, both attack entry points, audit/checkpoint/ground truth boundaries |
+| Architecture/workflow diagram | [Deployed SVG](figures/deployed-architecture.svg), [editable Mermaid](figures/deployed-architecture.mmd), [implementation explanation](architecture.md) | Shows separate issuance/delegation, OPA PE→PA administration, gateway PEP mediation and actual PA tool dispatch, distinct attacks, and independent evidence boundaries |
 | Risk/control mapping | Table II below | Distinguish prevention, containment, detection and response |
 | Research-gap table | Table III below | Explain addressed scope and residual limitations |
 | Recommendation matrix | Table IV below | Separate measured support from architectural rationale |

@@ -10,6 +10,7 @@ import os
 import re
 import sqlite3
 import time
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
@@ -58,14 +59,14 @@ class Execute(BaseModel):
 
 @app.get("/health")
 def health() -> dict[str, Any]:
-    with connect() as db:
+    with closing(connect()) as db, db:
         db.execute("SELECT 1")
     return {"ok": True, "service": KIND, "synthetic_data_only": True}
 
 
 @app.post("/reset")
 def reset(request: Reset) -> dict[str, Any]:
-    with connect() as db:
+    with closing(connect()) as db, db:
         db.execute("BEGIN IMMEDIATE")
         db.execute("INSERT OR REPLACE INTO runs VALUES (?,?)", (request.run_id, json.dumps(snapshot(request.content))))
         db.execute("DELETE FROM calls WHERE run_id=?", (request.run_id,))
@@ -75,7 +76,7 @@ def reset(request: Reset) -> dict[str, Any]:
 
 @app.get("/state/{run_id}")
 def state(run_id: str) -> dict[str, Any]:
-    with connect() as db:
+    with closing(connect()) as db, db:
         row = db.execute("SELECT state FROM runs WHERE run_id=?", (run_id,)).fetchone()
     if not row:
         raise HTTPException(404, "Unknown run")
@@ -91,12 +92,12 @@ def evidence(run_id: str) -> dict[str, Any]:
     makes the state and successful write-call ledger one consistent snapshot.
     Read-only probes are deliberately excluded from the write ledger.
     """
-    with connect() as db:
+    with closing(connect()) as db, db:
         db.execute("BEGIN")
         row = db.execute("SELECT state FROM runs WHERE run_id=?", (run_id,)).fetchone()
         if not row:
             raise HTTPException(404, "Unknown run")
-        calls = db.execute("SELECT request_id,fingerprint,response FROM calls WHERE run_id=? ORDER BY rowid", (run_id,)).fetchall()
+        calls = db.execute("SELECT request_id,fingerprint,response FROM calls WHERE run_id=? ORDER BY rowid", (run_id,))
         writes = []
         for request_id, fingerprint, response in calls:
             recorded = json.loads(fingerprint)
@@ -175,7 +176,7 @@ def apply_action(s: dict[str, Any], action: str, p: dict[str, Any]) -> dict[str,
 @app.post("/execute")
 def execute(request: Execute) -> dict[str, Any]:
     fingerprint = json.dumps({"action": request.action, "params": request.params}, sort_keys=True, separators=(",", ":"))
-    with connect() as db:
+    with closing(connect()) as db, db:
         db.execute("BEGIN IMMEDIATE")
         old = db.execute("SELECT fingerprint,response FROM calls WHERE run_id=? AND request_id=?", (request.run_id, request.request_id)).fetchone()
         if old:

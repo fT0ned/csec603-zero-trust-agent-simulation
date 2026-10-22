@@ -146,7 +146,7 @@ $("run-form").addEventListener("submit", async event => {
   const form = new FormData(event.target);
   const config = Object.fromEntries(form.entries());
   config.conditions = form.getAll("conditions"); config.scenarios = form.getAll("scenarios");
-  for (const field of ["repeats", "seed", "concurrency", "observation_seconds", "observation_margin_seconds", "probe_interval_seconds", "s3_probe_interval_seconds", "budget_usd"]) config[field] = Number(config[field]);
+  for (const field of ["repeats", "seed", "concurrency", "observation_seconds", "theft_delay_seconds", "observation_margin_seconds", "probe_interval_seconds", "s3_probe_interval_seconds", "budget_usd"]) config[field] = Number(config[field]);
   config.ttl_seconds = config.ttl_seconds.split(",").map(x => Number(x.trim()));
   config.revocation_modes = config.revocation_modes.split(",");
   $("start-button").disabled = true;

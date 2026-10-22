@@ -13,3 +13,8 @@ Verified on October 22, 2026 through the in-app browser at `http://127.0.0.1:876
 Screenshots: [C0 evidence and comparison](dashboard-evidence.jpg), [C2 policy and issuance trace](dashboard-c2-policy.jpg).
 
 The separate API suite verifies lifecycle behavior, retained raw files, redacted exports, Host/Origin/path boundaries, provider-specific prerequisites, cancellation and restart recovery, and SVG plot delivery. Its runner fixtures do not make paid calls and must not be counted as experimental trials.
+
+
+## Final protocol and launch check
+
+The final check used Edge and the actual `scripts/launch.ps1` wrapper, with no paid calls or container changes. Current server PID7944 listens on loopback8765. The full preset displayed32workers,90secondmargin and120secondtheft; backend/UI accept1–1800seconds. The CLI final-protocol batch's gzip trace decoded, JSON contained3trials and the ZIP had137members with valid exported checksums. Collected source CRLF bytes matched the original source hash; provider keys were absent and temporary ZIP files were removed. See dashboard-launch-wrapper.json and dashboard-launch-wrapper.jpg. The active real pilot002 was visible read-only and was not cancelled/reset by this check.

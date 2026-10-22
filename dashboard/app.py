@@ -65,6 +65,7 @@ class ExperimentConfig(BaseModel):
     s3_probe_interval_seconds: float = Field(default=10.0, ge=0.05, le=60)
     observation_seconds: float = Field(default=2.0, ge=0.1, le=7200)
     observation_margin_seconds: int = Field(default=5, ge=5, le=180)
+    theft_delay_seconds: int = Field(default=120, ge=1, le=1800)
     concurrency: int = Field(default=1, ge=1, le=32)
     model: str = Field(default="deepseek-flash", max_length=150, pattern=r"^[A-Za-z0-9_.:/-]*$")
     budget_usd: float = Field(default=4, ge=0, le=10000)
@@ -116,7 +117,7 @@ def safe_file(root: Path, relative: str) -> Path:
 def sanitized_bytes(path: Path) -> bytes:
     if path.suffix in {".png", ".jpg", ".jpeg"}:
         return path.read_bytes()
-    content = path.read_text(encoding="utf-8", errors="replace")
+    content = path.read_bytes().decode("utf-8", errors="replace")
     try:
         if path.suffix == ".json":
             return json.dumps(redact(json.loads(content)), indent=2, ensure_ascii=False).encode()

@@ -3,6 +3,7 @@ import hashlib
 import contextlib
 import io
 import gzip
+import shutil
 from pathlib import Path
 import tempfile
 import unittest
@@ -227,6 +228,32 @@ class EvidenceAnalysisTests(unittest.TestCase):
         b={**a,"probe_interval_seconds":1.0,"s3_probe_interval_seconds":10.0,"observation_seconds":3690.0,"budget_usd":4.0}
         self.assertEqual(config_fingerprint(a),config_fingerprint(b))
         self.assertNotEqual(config_fingerprint(a),config_fingerprint({**b,"observation_margin_seconds":5}))
+
+    def test_parent_directory_keeps_collections_separate_and_ids_portable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            parent=Path(directory)/"results"
+            for i in (0,1):
+                batch=parent/f"pilot-{i}";batch.mkdir(parents=True)
+                (batch/"config.json").write_text(json.dumps({"mode":"llm","phase":"pilot","model":"software-fixture","observation_seconds":305+i*85}),encoding="utf-8")
+                (batch/"manifest.json").write_text(json.dumps({"git_commit":f"software-fixture-{i}","cells":[]}),encoding="utf-8")
+                for condition in ("C0","C2"):
+                    folder=batch/"runs"/condition;folder.mkdir(parents=True)
+                    outcome=(condition=="C0") if i==0 else (condition=="C2")
+                    (folder/"summary.json").write_text(json.dumps({"run_id":condition,"mode":"llm","phase":"pilot","condition":condition,"scenario":"S2",
+                        "pair_id":"same-pair","seed":603,"payload_id":"fixture","status":"completed","unauthorized_outcome":outcome}),encoding="utf-8")
+            report=analyze(parent,Path(directory)/"derived",100)
+            ids={r["collection_id"] for r in report["tables"]}
+            self.assertEqual(len(ids),2)
+            self.assertEqual(len(report["tables"]),4)
+            contrasts=[r for r in report["comparisons"] if r["left"]=="C0" and r["right"]=="C2" and r["metric"]=="unauthorized_outcome"]
+            self.assertEqual(sorted(r["effect"]["estimate"] for r in contrasts),[-1,1])
+            self.assertTrue(all(r["n_left"]==r["n_right"]==1 for r in contrasts))
+            self.assertTrue(all(r["collection_manifest_sha256"] and r["collection_config_sha256"] for r in report["sources"]))
+            copied=Path(directory)/"renamed-unzip-folder"
+            shutil.copytree(parent/"pilot-0",copied)
+            replay=analyze(copied,Path(directory)/"replayed",100)
+            original_id=next(r["collection_id"] for r in report["sources"] if "pilot-0" in r["collection_root"])
+            self.assertEqual({r["collection_id"] for r in replay["tables"]},{original_id})
 
 
 if __name__ == "__main__":unittest.main()

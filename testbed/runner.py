@@ -1,6 +1,7 @@
 import concurrent.futures
 import copy
 import json
+import math
 import os
 import platform
 import random
@@ -13,7 +14,7 @@ from pathlib import Path
 import httpx
 from .common import ROOT, canonical, digest, write_json
 from .fixtures import fixture, PROBES
-from .audit import attribution, verify, tamper_suite
+from .audit import attribution, tamper_files
 from .agent import Budget, MODEL, llm_loop, ProviderFailure, provider_for
 
 def config_fingerprint(config):
@@ -65,7 +66,10 @@ def validate_config(config):
     if any(c not in ['C0','C1','C2','C2-noWF','C2-RS'] for c in config.get('conditions',[])): raise ValueError('Unknown condition')
     if any(s not in ['S1','S2','S3','S4','S5'] for s in config.get('scenarios',[])): raise ValueError('Unknown scenario')
     if not 1<=config.get('repeats',1)<=300 or not 1<=config.get('concurrency',1)<=32: raise ValueError('Invalid run count/concurrency')
-    if config.get('probe_interval_seconds',.1)<=0 or config.get('observation_seconds',2)<=0: raise ValueError('Timing must be positive')
+    for field,default in [('probe_interval_seconds',.1),('s3_probe_interval_seconds',10),('observation_seconds',2)]:
+        if not math.isfinite(float(config.get(field,default))) or float(config.get(field,default))<=0: raise ValueError('Timing must be finite and positive')
+    delay=config.get('theft_delay_seconds',120)
+    if isinstance(delay,bool) or not isinstance(delay,int) or not 1<=delay<=1800:raise ValueError('Fixed theft delay must be1..1800seconds')
     if not config.get('ttl_seconds') or any(t not in [300,900,3600] for t in config['ttl_seconds']): raise ValueError('Use approved real-time credential lifetimes300/900/3600')
     if not config.get('conditions') or not config.get('scenarios'): raise ValueError('Select conditions/scenarios')
     if any(m not in ['now','expiry'] for m in config.get('revocation_modes',['now','expiry'])): raise ValueError('Unknown revocation mode')
@@ -105,7 +109,9 @@ def run_one(cell, config, batch):
       'reachable_authority':None,'cumulative_ratio':None,'cost_usd':0,'audit_complete':0,'audit_total':0,
       'exposure_seconds':None,'event_observed':None,'revocation_propagation_ms':None,'revocation_to_denial_ms':None}
     write_json(folder/'summary.json',summary);write_json(folder/'fixture.json',fixed)
-    transcript=[];actions=[];truth=[];entry_id=None;records=[];probes=[];checkpoint={'count':0,'hash':'0'*64}
+    transcript=[];actions=[];truth=[];entry_id=None;checkpoint={'count':0,'hash':'0'*64};capability_pool=None;process=None
+    truth_count=0;complete_audit_count=0;attributed='none'
+    required={'request_id','time','credential_id','issuance','origin','principal','agent','delegation_chain','task_id','input_provenance','action','policy_decision','policy_reason','result','previous_hash'}
     def save_line(path,row):
         # Bound individual evidence files below repository/reader size limits without losing observations.
         if path.exists() and path.stat().st_size>1_000_000:
@@ -120,6 +126,8 @@ def run_one(cell, config, batch):
             token=secrets.token_urlsafe(32);identity={'credential_id':digest(token),'spiffe_id':'static:research-agent','issuer':'static','jwks':{'keys':[]}}
         else:
             identity=issue(run_id,cell['ttl_seconds']);token=identity.pop('token');entry_id=identity['entry_id']
+        received_at=time.time()
+        summary['credential_received_at']=received_at
         expected_origin=container_request('agent-client',{'url':'http://gateway:8000/whoami'})['data']['origin']
         setup={**cell,'run_id':run_id,**identity,'expected_origin':expected_origin,
                'content':fixed['content'],'delegation':fixed['delegation'],'issuance':{k:v for k,v in identity.items() if k not in ['jwks','claims']}}
@@ -128,23 +136,30 @@ def run_one(cell, config, batch):
         claims=identity.get('claims',{})
         summary['nominal_remaining_seconds']=max(0,claims.get('exp',time.time())-time.time()) if cell['condition']!='C0' else None
         def invoke(call, source='agent-client', cause='none', reachable=False, active_id=run_id, observed=None):
-            nonlocal checkpoint
+            nonlocal checkpoint,truth_count,complete_audit_count,attributed
+            streamed=observed is not None
             request_id=observed['request']['request_id'] if observed else uuid.uuid4().hex
             request={'run_id':active_id,'request_id':request_id,**call}
             row={'request_id':request_id,'true_cause':cause,'payload_id':summary['payload_id'] if cause=='coercion' else None,
                  'attacker_client_id':'attacker' if cause=='impersonation' else None,'action':call,'time':time.time()}
             if not reachable:
-                truth.append(row);save_line(folder/'ground-truth.jsonl',row)
+                truth_count+=1
+                if not streamed: truth.append(row)
+                save_line(folder/'ground-truth.jsonl',row)
             observed=observed or container_request(source,{'url':'http://gateway:8000/tool','data':request,'token':token})
             result=observed['data']
             if reachable: return result
-            actions.append({**request,**result,'latency_ms':observed['latency_ms'],'client':source})
-            save_line(folder/'actions.jsonl',actions[-1]);records.append(result['audit']);save_line(folder/'audit.jsonl',result['audit'])
+            action_row={**request,**result,'latency_ms':observed['latency_ms'],'client':source}
+            if not streamed:actions.append(action_row)
+            save_line(folder/'actions.jsonl',action_row);save_line(folder/'audit.jsonl',result['audit'])
             # Independently recompute checkpoint, not trust service's claimed hash/count.
             observed_row=dict(result['audit']);claimed_hash=observed_row.pop('hash',None)
             if observed_row.get('sequence')!=checkpoint['count']+1 or observed_row.get('previous_hash')!=checkpoint['hash'] or digest(observed_row)!=claimed_hash:
                 raise RuntimeError('Observed audit chain invalid')
-            checkpoint={'count':len(records),'hash':records[-1]['hash']};write_json(folder/'checkpoint.json',checkpoint)
+            checkpoint={'count':checkpoint['count']+1,'hash':claimed_hash};write_json(folder/'checkpoint.json',checkpoint)
+            complete_audit_count+=int(required<=set(result['audit']))
+            label=attribution([result['audit']])
+            if label=='impersonation' or (label=='coercion' and attributed!='impersonation'): attributed=label
             summary['latencies_ms'].append(observed['latency_ms']);summary['authorization_ms'].append(result['authorization_ms'])
             summary['approval_count']+=result['approval_count'];summary['approval_delay_ms']+=result['approval_delay_ms']
             if result['outcome']=='infrastructure_error': raise RuntimeError('Policy engine unavailable; audited attempt retained')
@@ -180,20 +195,34 @@ def run_one(cell, config, batch):
             model_result={'exhausted':False}
             agent_invoke(fixed['task']['expected'][0])
             for call in payload['calls'] if payload else fixed['task']['expected'][1:]: agent_invoke(call)
-        # Reachability probes each have an independent freshly reset task, so probe effects do not contaminate the main outcome.
-        reached=[]
-        if cell['scenario'] in ['S2','S3','S5']:
+        # Each capability probe uses its own fresh task and has no effect on the main outcome.
+        def measure_reachability():
+            reached=[]
             for index,call in enumerate(PROBES):
-                # Reachability is existence of an executable action, including task-approved parameters.
                 call=next((expected for expected in fixed['task']['expected'] if expected['action']==call['action']),call)
                 probe_id=run_id+'-p'+str(index);admin_post('/control/runs',{**setup,'run_id':probe_id})
                 result=invoke(call,'attacker','impersonation',reachable=True,active_id=probe_id)
+                if 'expired' in result['reason'] or result['reason']=='revoked':
+                    raise RuntimeError('Credential became invalid during capability measurement')
                 reached.append({'action':call['action'],'params':call['params'],'executed':result['outcome']=='executed','reason':result['reason']})
                 admin_post('/control/'+probe_id+'/retire')
-            summary['reachable_authority']=sum(x['executed'] for x in reached)
             write_json(folder/'reachability.json',reached)
+            return sum(x['executed'] for x in reached)
+        if cell['scenario'] in ['S2','S5']:
+            summary['reachable_authority']=measure_reachability()
         if cell['scenario'] in ['S3','S4']:
+            delay=config.get('theft_delay_seconds',120) if config['phase']!='engineering' else 0
+            scheduled_theft=received_at+delay
+            if delay and time.time()>scheduled_theft+1:
+                raise RuntimeError('Setup missed the fixed theft schedule; timing failure retained')
+            if scheduled_theft>time.time():time.sleep(scheduled_theft-time.time())
+            summary['scheduled_theft_at']=scheduled_theft
             theft=time.monotonic();wall_theft=time.time();last_success=None;first_denial=None
+            summary['theft_schedule_error_seconds']=wall_theft-scheduled_theft
+            capability_pool=None;capability_future=None
+            if cell['scenario']=='S3':
+                capability_pool=concurrent.futures.ThreadPoolExecutor(max_workers=1)
+                capability_future=capability_pool.submit(measure_reachability)
             summary['nominal_remaining_seconds']=max(0,claims['exp']-wall_theft) if claims.get('exp') else None
             # Replay harmful request separately from harmless credential-validity probes.
             harmful_call=PROBES[3]
@@ -210,6 +239,7 @@ def run_one(cell, config, batch):
             stream_request={'url':'http://gateway:8000/tool','token':token,
                  'data':{'run_id':run_id,'action':'files.read','params':{'path':'brief'}},
                  'probe':{'deadline':wall_theft+window,'interval':interval}}
+            if cell['scenario']=='S3':stream_request['probe']['first_probe_at']=wall_theft+interval
             process=subprocess.Popen(['docker','compose','exec','-T','attacker','python','-m','testbed.client'],
                    cwd=ROOT,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
             process.stdin.write(canonical(stream_request));process.stdin.close()
@@ -220,7 +250,7 @@ def run_one(cell, config, batch):
                 elapsed=observed['time']-wall_theft
                 valid=response['outcome']=='executed'
                 probe={'elapsed_seconds':elapsed,'valid':valid,'reason':response['reason'],'time':observed['time']}
-                probes.append(probe);save_line(folder/'probes.jsonl',probe)
+                save_line(folder/'probes.jsonl',probe)
                 if valid: last_success=elapsed
                 else:
                     first_denial=elapsed
@@ -237,6 +267,9 @@ def run_one(cell, config, batch):
             summary.update(exposure_seconds=last_success,last_success_seconds=last_success,first_denial_seconds=first_denial,
                 event_observed=first_denial is not None,observation_window_seconds=time.monotonic()-theft,
                 probe_interval_seconds=interval,probe_resolution_note='Probes scheduled inside attacker container; actual timestamps retained')
+            if capability_future is not None:
+                summary['reachable_authority']=capability_future.result()
+                capability_pool.shutdown(wait=True)
             summary['theft_at']=wall_theft
             summary['last_success_after_security_decision_seconds']=(wall_theft+last_success-revoke_at) if revoke_at and last_success is not None else None
         if cell['scenario']=='S5':
@@ -264,15 +297,20 @@ def run_one(cell, config, batch):
         expected_denials=any({'action':x['action'],'params':x['params']} in fixed['task']['expected'] and x['outcome']=='denied' for x in actions)
         summary['task_outcome']='completed' if complete else 'wrongly_denied_by_policy' if expected_denials else 'timeout' if model_result.get('exhausted') else 'model_or_tool_error' if model_result.get('provider_error') or model_result.get('model_errors') or any(x['outcome']=='tool_error' for x in actions) else 'incomplete'
         actual_cause='impersonation' if cell['scenario'] in ['S3','S4'] else 'coercion' if summary['injection_followed'] else 'none'
-        summary['attribution_true']=actual_cause;summary['attribution_predicted']=attribution(records)
-        required={'request_id','time','credential_id','issuance','origin','principal','agent','delegation_chain','task_id','input_provenance','action','policy_decision','policy_reason','result','previous_hash'}
-        summary['audit_total']=len(truth)+len(model_result.get('model_errors',[]));summary['audit_complete']=sum(required<=set(x) for x in records)
-        tamper=tamper_suite(records,checkpoint);write_json(folder/'tamper.json',tamper)
+        summary['attribution_true']=actual_cause;summary['attribution_predicted']=attributed
+        summary['audit_total']=truth_count+len(model_result.get('model_errors',[]));summary['audit_complete']=complete_audit_count
+        audit_paths=sorted(folder.glob('audit*.jsonl'),key=lambda p:0 if p.name=='audit.jsonl' else int(p.stem.rsplit('-',1)[1]))
+        tamper=tamper_files(audit_paths,checkpoint);write_json(folder/'tamper.json',tamper)
         summary['tamper_total']=len(tamper);summary['tamper_detected']=sum(not x['valid'] for x in tamper.values())
         summary['status']='completed'
     except Exception as error:
         summary['status']='infrastructure_failure';summary['error']=type(error).__name__+': '+str(error)
     finally:
+        if process is not None and process.poll() is None:
+            process.terminate()
+            try:process.wait(timeout=5)
+            except subprocess.TimeoutExpired:process.kill()
+        if capability_pool is not None:capability_pool.shutdown(wait=True,cancel_futures=True)
         write_json(folder/'transcript.json',transcript)
         summary['metadata']['finished_at']=time.time()
         write_json(folder/'summary.json',summary)
@@ -317,7 +355,7 @@ def run_batch(config, output):
         path=ROOT/name;target=output/'source'/name;target.write_bytes(path.read_bytes());source_hashes[name]=__import__('hashlib').sha256(path.read_bytes()).hexdigest()
     write_json(output/'config.json',config);write_json(output/'manifest.json',{'cells':cells,'count':len(cells),'created_at':time.time(),
         'git_commit':subprocess.run(['git','rev-parse','HEAD'],cwd=ROOT,text=True,capture_output=True).stdout.strip(),
-        'python':sys.version,'platform':platform.platform(),'mode':config['mode'],'phase':config['phase'],'source_sha256':source_hashes,'process_id':os.getpid(),
+        'python':sys.version,'platform':platform.platform(),'mode':config['mode'],'phase':config['phase'],'source_sha256':source_hashes,'process_id':os.getpid(),'collection_name':output.name,
         'working_tree_dirty':bool(subprocess.run(['git','status','--porcelain'],cwd=ROOT,text=True,capture_output=True).stdout.strip())})
     completed=0;failures=0
     with concurrent.futures.ThreadPoolExecutor(max_workers=config.get('concurrency',1)) as pool:

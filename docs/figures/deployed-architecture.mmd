@@ -1,0 +1,80 @@
+%% Fig. 1. Deployed C2 control and independent evidence paths (authors' work).
+%% Editable topology source; the companion SVG supplies the paper layout.
+flowchart TB
+  subgraph HOST["Trusted host orchestration and independent evidence boundary"]
+    direction LR
+    UI["Local dashboard<br/>Configure, start, reset, inspect, export"]
+    H["Principal and experiment harness<br/>Fixed task/delegation; real LLM planning loop<br/>Provider receives mock content, never credentials"]
+    GT["Independent host ground truth<br/>True cause / payload / attacker labels<br/>Unavailable to attribution predictor"]
+    CP["Independent host checkpoint<br/>Recomputed hash + record count<br/>Written after every observed response"]
+    ORACLE["Independent committed tool-state oracle<br/>Trusted Docker exec → local /evidence<br/>State and write request IDs"]
+    UI --> H
+  end
+
+  subgraph IDENTITY["Internal identity network and workload socket"]
+    direction LR
+    SERVER["SPIRE server<br/>Trust domain csec603.test<br/>Join-token node registration"]
+    SA["SPIRE agent<br/>Unix UID workload attestation"]
+    SERVER <--> SA
+  end
+
+  subgraph CONTROL["Internal control network"]
+    direction LR
+    OPA["Policy Engine: OPA<br/>Identity, action, trusted task scope,<br/>workflow counters and runtime signals"]
+    PA["Policy Administrator<br/>Trusted delegation store; atomic workflow state<br/>Careful / rubber-stamp approval; one-use expiring JIT<br/>Serialized tool-side enforcement and dispatch"]
+    SEC["Security administration<br/>Revoke credential or suspend session"]
+    PA -->|"trusted inputs"| OPA
+    OPA -->|"allow / deny / require approval"| PA
+    SEC -->|"authenticated admin command"| PA
+  end
+
+  subgraph FRONT["Front network: no client route to tools or control state"]
+    direction LR
+    A["Attested agent-client container<br/>UID 10001; model-selected tool requests<br/>Disposable credential supplied on stdin"]
+    B["Attacker B: stolen-credential impersonation<br/>UID 10002; separate client<br/>Copied bearer token, no fresh issuance"]
+    PEP["Gateway PEP<br/>Credential validation + shared deny-list each call<br/>Capture actual socket origin<br/>Forward through PA and return result"]
+    A -->|"token + action"| PEP
+    B -->|"stolen token replay"| PEP
+  end
+
+  subgraph TOOLS["Private internal tools network: no published tool ports"]
+    T["Files / email / CRM / payments<br/>Low- and high-impact mock actions<br/>Resettable per-run snapshot; durable committed state"]
+  end
+  INJ["Attacker A: coercion / prompt injection<br/>Malicious instructions in tool content<br/>No credential or policy modification"]
+
+  H -->|"trusted principal/task delegation; distinct from issuance"| PA
+  H -.->|"Docker exec launches attested request client"| A
+  SA <-->|"workload API socket; JWT-SVID / JWKS"| A
+  PEP -->|"validated request"| PA
+  PA -->|"decision and tool result"| PEP
+  PA <-->|"allowed dispatch / tool result"| T
+  PA -.->|"push revoked credential digest"| PEP
+  INJ -->|"injected content returned through PA / gateway"| T
+  PA --> AUDIT["Append-only hash-chained PA audit<br/>Sequence, credential, action, outcome, previous hash<br/>C2 adds principal, delegation, origin, provenance and policy"]
+  PEP -.->|"observed response audit"| CP
+  H -->|"independent cause recording"| GT
+  ORACLE -.->|"host-only read via Docker exec"| T
+
+  subgraph OFFLINE["Host-only offline analysis and export"]
+    direction LR
+    VERIFY["Streaming audit verifier<br/>Full chain versus independent checkpoint<br/>Alter / middle delete / tail delete / all delete / reorder"]
+    PRED["Attribution predictor<br/>Condition-visible log evidence only<br/>Origin mismatch or parameter-level provenance"]
+    SCORE["Independent scorer and statistics<br/>Compare predictions with ground truth<br/>Measured outcomes from committed tool state"]
+    EXPORT["CSV / JSON / SVG / reproducibility bundle<br/>Raw data, uncertainty, collection/source hashes,<br/>model/date and validity limitations"]
+    PRED --> SCORE --> EXPORT
+  end
+  AUDIT --> VERIFY
+  CP --> VERIFY
+  AUDIT --> PRED
+  GT --> SCORE
+  ORACLE --> SCORE
+  VERIFY --> EXPORT
+
+  classDef attack fill:#fff7f7,stroke:#ae3030,stroke-width:2px,color:#111827;
+  classDef policy fill:#f4f8ff,stroke:#255b8f,stroke-width:2px,color:#111827;
+  classDef identity fill:#faf7ff,stroke:#6b5a95,stroke-width:2px,color:#111827;
+  classDef evidence fill:#f5fbf7,stroke:#31745b,stroke-width:2px,color:#111827;
+  class B,INJ attack;
+  class OPA,PA,PEP,SEC policy;
+  class SERVER,SA,A identity;
+  class GT,CP,ORACLE,VERIFY,SCORE,EXPORT evidence;
