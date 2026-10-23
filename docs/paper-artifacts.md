@@ -13,7 +13,7 @@ This file supplies implementation-to-paper mappings and draft analytical artifac
 | Risk/control mapping | Table II below | Distinguish prevention, containment, detection and response |
 | Research-gap table | Table III below | Explain addressed scope and residual limitations |
 | Recommendation matrix | Table IV below | Separate measured support from architectural rationale |
-| Simulation design table | Frozen manifest, policy/task/payload catalogs and analysis plan | Report exact versions, model settings, timing, run count, thresholds and reset procedure |
+| Simulation design and RQ/hypothesis tables | [Numbered Tables VI–IX with frozen implementation links](experimental-design.md), frozen manifest and analysis plan | Report exact versions, model settings, timing, run count, thresholds, reset procedure and interrupted-collection boundary |
 | Results tables/plots | `analysis/results.md`, CSV, JSON and standalone SVG | Confirm no mixed modes or pilot/full results; interpret null results |
 | Threats-to-validity table | Table V below | Include dataset bias, model version, attribution assumptions and single-machine constraints |
 
