@@ -20,6 +20,16 @@ def main():
     assert not module.batch_quality_errors(clean)
     assert module.batch_quality_errors({**clean,'unexpected_errors':[{'clock_event_capture_error':'RuntimeError'}]})
     assert module.batch_quality_errors({**clean,'remaining_failures':1})
+    with tempfile.TemporaryDirectory(prefix='csec603-repair-source-check-') as directory:
+        root=Path(directory);captured=root/'captured';frozen=root/'frozen';captured.mkdir();frozen.mkdir()
+        (captured/'client.py').write_bytes(b"print('fixture')\r\n")
+        (frozen/'client.py').write_bytes(b"print('fixture')\n")
+        h=hashlib.sha256((captured/'client.py').read_bytes()).hexdigest()
+        assert module.compare_deployed_sources({'client.py':h},captured,frozen,{'client.py':h})['passed']
+        assert not module.compare_deployed_sources({'client.py':'0'*64},captured,frozen,{'client.py':h})['passed']
+        (captured/'client.py').write_bytes(b"print('changed code')\r\n")
+        changed=hashlib.sha256((captured/'client.py').read_bytes()).hexdigest()
+        assert not module.compare_deployed_sources({'client.py':changed},captured,frozen,{'client.py':changed})['passed']
     from analysis.run import load_runs
     from analysis.cli import verify_raw
     with tempfile.TemporaryDirectory(prefix='csec603-repair-junction-check-') as directory:
@@ -50,6 +60,7 @@ def main():
       'remaining_failure_vetoes_quality':True,'python312_rglob_traverses_windows_junction':True,
       'frozen_loader_uses_view_lexical_collection_context':True,'frozen_loader_resolves_original_source_path':True,
       'frozen_raw_verifier_accepts_scoped_junction_read':True,'passed':True,'experiment_started':False,'provider_calls':0}
+    checks.update({'captured_CRLF_frozen_LF_semantics_accepted':True,'deployed_byte_change_rejected':True,'non_newline_source_change_rejected':True})
     print(json.dumps(checks))
     return checks
 

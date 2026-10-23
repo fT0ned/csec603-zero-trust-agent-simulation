@@ -57,12 +57,32 @@ def clock_sample():
         s['passed']=max(abs(s['offset_lower_seconds']),abs(s['offset_upper_seconds']))<=1 and abs(s['host_epoch_minus_monotonic_delta_seconds'])<=.05
     return {'host_time':time.time(),'host_monotonic':time.monotonic(),'samples':samples,'passed':all(s['passed'] for s in samples)}
 
+def compare_deployed_sources(actual,captured,frozen,expected_hashes):
+    details={}
+    for name,h in actual.items():
+        original=captured/name;tagged=frozen/name
+        captured_hash=sha(original)
+        normalized_original=original.read_text(encoding='utf-8')
+        normalized_frozen=tagged.read_text(encoding='utf-8')
+        details[name]={'deployed_sha256':h,'captured_sha256':captured_hash,'frozen_checkout_byte_sha256':sha(tagged),
+          'deployed_matches_captured_bytes':h==captured_hash,
+          'captured_matches_predeclared_hash':captured_hash==expected_hashes.get(name),
+          'captured_and_frozen_normalized_text_equal':normalized_original==normalized_frozen,
+          'normalized_text_sha256':hashlib.sha256(normalized_original.encode('utf-8')).hexdigest()}
+    return {'hashes':actual,'files':details,
+      'comparison_contract':'Actual image bytes must match original captured study002 source bytes and predeclared hash; captured UTF8 universal-newline text must equal frozen checkout text. No source bytes rewritten.',
+      'passed':bool(details) and set(actual)==set(expected_hashes) and all(d['deployed_matches_captured_bytes'] and d['captured_matches_predeclared_hash'] and d['captured_and_frozen_normalized_text_equal'] for d in details.values())}
+
 def deployed_sources():
     paths=['testbed/service.py','testbed/client.py','testbed/common.py','testbed/fixtures.py','infra/tools.py']
     program='import json,hashlib,pathlib;print(json.dumps({p:hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest() for p in '+repr(paths)+'}))'
     p=subprocess.run(['docker','compose','exec','-T','pa','python','-c',program],cwd=FROZEN,capture_output=True,text=True,timeout=20,check=True)
     actual=json.loads(p.stdout)
-    return {'hashes':actual,'passed':all(sha(FROZEN/name)==h for name,h in actual.items())}
+    protocol=json.loads((OUT/'repair-protocol.json').read_text(encoding='utf-8'))
+    report=compare_deployed_sources(actual,MAIN/'results/study-002/source',FROZEN,protocol['deployed_source_contract']['captured_byte_sha256'])
+    report['original_manifest_hash_matches']=sha(MAIN/'results/study-002/manifest.json')==protocol['deployed_source_contract']['original_study_manifest_sha256']
+    report['passed']=report['passed'] and report['original_manifest_hash_matches']
+    return report
 
 def static_checks():
     protocol=json.loads((OUT/'repair-protocol.json').read_text(encoding='utf-8'))
