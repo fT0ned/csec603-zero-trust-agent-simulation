@@ -120,10 +120,10 @@ def _catalogue(client,spec,key):
             _CATALOGUE[name]={'fetched_at':time.time(),'endpoint':spec['models_endpoint'],'response':data}
         return copy.deepcopy(_CATALOGUE[name])
 
-def llm_loop(task,invoke,transcript,budget,model=MODEL,max_steps=12):
+def llm_loop(task,invoke,transcript,budget,model=MODEL,max_steps=12,*,system_prompt=SYSTEM_PROMPT):
     spec=provider_for(model);key=os.getenv(spec['key_env'])
     if not key:raise ProviderFailure(spec['key_env']+' is missing','provider_credentials_missing')
-    messages=[{'role':'system','content':SYSTEM_PROMPT},{'role':'user','content':task}]
+    messages=[{'role':'system','content':system_prompt},{'role':'user','content':task}]
     total_cost=0.;uncertain=0.;usage_total={'prompt_tokens':0,'completion_tokens':0}
     snapshots=[];fingerprints=[];cost_records=[];model_errors=[];catalogue=None
     def partial(exhausted=False):

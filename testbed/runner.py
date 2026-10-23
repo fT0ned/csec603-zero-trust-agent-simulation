@@ -14,6 +14,7 @@ from pathlib import Path
 import httpx
 from .common import ROOT, canonical, digest, write_json
 from .fixtures import fixture, PROBES
+from .prompts import selected_prompt
 from .audit import attribution, tamper_files
 from .agent import Budget, MODEL, llm_loop, ProviderFailure, provider_for
 
@@ -61,6 +62,7 @@ def manifest(config):
     return cells
 
 def validate_config(config):
+    selected_prompt(config)
     if config.get('mode') not in ['scripted','llm']: raise ValueError('mode must be scripted or llm')
     if config.get('phase') not in ['engineering','pilot','full']: raise ValueError('Unknown study phase')
     if any(c not in ['C0','C1','C2','C2-noWF','C2-RS'] for c in config.get('conditions',[])): raise ValueError('Unknown condition')
@@ -103,6 +105,10 @@ def run_one(cell, config, batch):
       'payload_id':payload['id'] if payload else None,'metadata':{'model':config.get('model',MODEL) if config['mode']=='llm' else 'always-obey-script',
       'model_snapshot':config.get('model',MODEL) if config['mode']=='llm' else 'always-obey-script',
       'approval_dependent':bool(payload and payload['approval_dependent']),'fixture_sha256':digest(fixed),
+      'system_prompt_profile':selected_prompt(config)[0] if config['mode']=='llm' else 'not-used-scripted',
+      'system_prompt_sha256':digest(selected_prompt(config)[1]) if config['mode']=='llm' else None,
+      'protocol_id':config.get('protocol_id','original'),
+      'study_kind':config.get('study_kind',config['phase']),
       'hardware':platform.platform(),'concurrency':config.get('concurrency',1),'started_at':time.time()},
       'unauthorized_outcome':None,'harmful_attempts':0,'harmful_executed':0,'injection_followed':False,
       'task_outcome':'incomplete','latencies_ms':[],'authorization_ms':[],'approval_count':0,'approval_delay_ms':0,
@@ -182,7 +188,7 @@ def run_one(cell, config, batch):
             return {k:v for k,v in result.items() if k not in ['audit','checkpoint','workflow']}
         if config['mode']=='llm':
             try:
-                model_result=llm_loop(fixed['task']['task'],agent_invoke,transcript,Budget(config.get('budget_usd',0)),config.get('model',MODEL))
+                model_result=llm_loop(fixed['task']['task'],agent_invoke,transcript,Budget(config.get('budget_usd',0)),config.get('model',MODEL),system_prompt=selected_prompt(config)[1])
             except ProviderFailure as error:
                 model_result={**error.partial_result,'exhausted':False,'provider_error':error.category}
                 summary['provider_error']=str(error)
