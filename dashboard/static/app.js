@@ -48,7 +48,7 @@ async function refreshJobs() {
         const item = node("button", undefined, "job" + (job.id === selected ? " selected" : "")); item.type = "button";
         const header = node("div", undefined, "job-header"); header.append(node("span", job.id, "job-id"), statusBadge(job.status));
         item.append(header, node("div", job.evidence_label + " · " + job.config.phase.toUpperCase(), "job-mode"), node("div", job.config.conditions.join(" / ") + " · " + job.config.scenarios.join(" / "), "job-meta"), node("div", job.completed_runs + (job.progress?.total ? " / " + job.progress.total : "") + " completed units · " + (job.retained_failed_runs ? job.retained_failed_runs + " retained failed attempt(s) · " : "") + job.message, "job-meta"));
-        if (job.quality?.status === "failed") item.append(node("div", "QUALITY VALIDATION FAILED · inspect preserved validation.json", "job-meta"));
+        if (job.quality?.status === "failed") item.append(node("div", "QUALITY ASSESSMENT FAILED · inspect preserved assessments", "job-meta"));
         const progress = node("progress", undefined, "progress-line"); progress.max = job.progress?.total || Math.max(1, job.completed_runs); if (job.progress || !isActive(job)) progress.value = job.progress?.completed ?? job.completed_runs; progress.setAttribute("aria-label", "Trial collection progress"); item.append(progress);
         item.addEventListener("click", () => selectJob(job.id)); return item;
       }));
@@ -60,7 +60,7 @@ async function refreshJobs() {
       $("selected-label").textContent = current.id + " · " + current.status + " collection · " + current.completed_runs + " completed units · " + (current.retained_failed_runs || 0) + " retained failed attempts";
       const quality = current.quality?.status;
       $("quality-warning").hidden = !["failed", "unreadable", "unknown"].includes(quality);
-      $("quality-warning").textContent = quality === "failed" ? "Quality validation FAILED. Collection completion does not establish valid findings. Inspect preserved validation.json: " + (current.quality.errors || []).join("; ") : "Quality validation is unavailable or incomplete. Inspect preserved validation.json.";
+      $("quality-warning").textContent = quality === "failed" ? "Quality validation FAILED. Collection completion does not establish valid findings. Inspect preserved quality assessments: " + (current.quality.errors || []).join("; ") : "Quality validation is unavailable or incomplete. Inspect preserved quality assessments.";
       const config = current.config;
       $("collection-provenance").textContent = `Prompt: ${config.mode === "scripted" ? "not used (scripted)" : config.system_prompt_profile || "original-v1 (legacy default)"} · Protocol: ${config.protocol_id || "original (legacy default)"} · Study kind: ${config.study_kind || config.phase}`;
       if (lastRunCount !== current.completed_runs || lastJobStatus !== current.status || lastJobMessage !== current.message || lastQualityStatus !== current.quality?.status) { lastRunCount = current.completed_runs; lastJobStatus = current.status; lastJobMessage = current.message; lastQualityStatus = current.quality?.status; await loadEvidence(); }

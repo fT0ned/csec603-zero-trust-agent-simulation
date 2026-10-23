@@ -423,6 +423,53 @@ class JobManager:
                 continue
         return result
 
+    def quality(self, job_id):
+        """Aggregate additive reviews; no passing collector check overrides a veto."""
+        root = self.root / job_id
+        assessments = []
+        sources = [(root / name, name, False) for name in ("validation.json", "quality.json", "quality-adjudication.json") if (root / name).is_file()]
+        for review in self.root.glob("*/quality-adjudication.json"):
+            if review.parent == root or not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", review.parent.name):
+                continue
+            try:
+                resolved = safe_file(self.root, review.relative_to(self.root).as_posix())
+                if resolved.stat().st_size > 1024 * 1024:
+                    continue
+                record = json.loads(resolved.read_text(encoding="utf-8"))
+                if isinstance(record, dict) and record.get("collection_id") == job_id:
+                    sources.append((resolved, "external-quality/" + review.parent.name + "/quality-adjudication.json", True))
+            except (OSError, ValueError, HTTPException):
+                continue
+        for path, display, external in sources:
+            assessment = {"path": display, "status": "unreadable", "scope": "", "errors": []}
+            try:
+                if not path.resolve().is_relative_to(self.root) or path.stat().st_size > 1024 * 1024:
+                    raise ValueError("Assessment is outside results or exceeds 1 MB")
+                content = path.read_bytes()
+                record = json.loads(content)
+                if not isinstance(record, dict):
+                    raise ValueError("Quality assessment must be an object")
+                if external:
+                    declared = record.get("collection_path")
+                    if not isinstance(declared, str) or Path(declared).is_absolute() or ".." in Path(declared).parts or (self.repo / declared).resolve() != root.resolve():
+                        raise ValueError("External assessment collection_path does not bind this collection")
+                passed = record.get("passed")
+                assessment.update(status="passed" if passed is True else "failed" if passed is False else "unknown",
+                                  passed=passed if isinstance(passed, bool) else None,
+                                  scope=record.get("scope") if isinstance(record.get("scope"), str) else "",
+                                  source_sha256=hashlib.sha256(content).hexdigest())
+                errors = record.get("errors", [])
+                assessment["errors"] = [str(error) for error in errors] if isinstance(errors, list) else [str(errors)]
+                if assessment["status"] == "failed" and not assessment["errors"]:
+                    assessment["errors"] = [str(record.get("reason", "Quality assessment failed"))]
+            except (OSError, ValueError, TypeError) as error:
+                assessment["errors"] = [str(error)]
+            assessments.append(assessment)
+        statuses = {item["status"] for item in assessments}
+        status = next((candidate for candidate in ("failed", "unreadable", "unknown", "passed") if candidate in statuses), "not_validated")
+        errors = [item["path"] + ": " + error for item in assessments if item["status"] != "passed" for error in item["errors"]]
+        return redact({"status": status, "errors": errors, "assessments": assessments})
+
     def snapshot(self, job):
         result = dict(job)
         root = self.root / job["id"]
@@ -437,15 +484,7 @@ class JobManager:
         result["completed_runs"] = len({unit_key(item) for item in completed})
         result["retained_failed_runs"] = sum(item.get("status") not in (None, "completed", "running", "pending", "queued") for item in rows)
         result["recorded_attempts"] = len(rows)
-        validation_path = root / "validation.json"
-        result["quality"] = {"status": "not_validated", "errors": []}
-        if validation_path.is_file():
-            try:
-                validation = json.loads(validation_path.read_text(encoding="utf-8"))
-                passed = validation.get("passed")
-                result["quality"] = {"status": "passed" if passed is True else "failed" if passed is False else "unknown", "errors": validation.get("errors", [])}
-            except (OSError, ValueError, AttributeError):
-                result["quality"] = {"status": "unreadable", "errors": ["Inspect preserved validation.json"]}
+        result["quality"] = self.quality(job["id"])
         result["evidence_label"] = {"llm": "REAL LLM", "scripted": "SCRIPTED CONTROL CHECK"}.get(job["config"].get("mode"), "MODE NOT RECORDED")
         status_file = root / "progress.json"
         if status_file.exists():
@@ -668,13 +707,17 @@ def create_app(results_root: Path | None = None, repo: Path = REPO):
         return manager.compact_runs(job_id)
 
     def full_runs(job_id: str):
-        # Explicit exports retain the complete sanitized raw summaries.
+        # Explicit exports retain full summaries and label additive batch review.
         root = manager.path(job_id)
+        quality = manager.quality(job_id)
         result = []
         for path in sorted((root / "runs").glob("*/summary.json")):
             try:
                 resolved = safe_file(root, str(path.relative_to(root)))
                 item = redact(json.loads(resolved.read_text(encoding="utf-8")))
+                item["_batch_quality_status"] = quality["status"]
+                item["_batch_quality_errors"] = quality["errors"]
+                item["_batch_quality_assessments"] = quality["assessments"]
                 item.setdefault("run_id", path.parent.name)
                 item["summary_path"] = path.relative_to(root).as_posix()
                 result.append(item)
@@ -769,6 +812,7 @@ def create_app(results_root: Path | None = None, repo: Path = REPO):
             if exported_hash != raw_hash:
                 altered[name] = {"original_sha256": raw_hash, "exported_sha256": exported_hash,
                                  "reason": "Credential sanitization or text normalization changed exported bytes"}
+        quality = manager.quality(job_id)
         collected_source = (root / "source").is_dir()
         source_files = set()
         try:
@@ -781,6 +825,13 @@ def create_app(results_root: Path | None = None, repo: Path = REPO):
                     else:
                         name = "results/" + entry["path"]
                     add_file(archive, file, name)
+                # Sibling reviews are additive export copies, never inserted into raw data.
+                for assessment in quality["assessments"]:
+                    display = assessment["path"]
+                    if display.startswith("external-quality/") and assessment.get("source_sha256"):
+                        relative = display[len("external-quality/"):]
+                        review = safe_file(manager.root, relative)
+                        add_file(archive, review, "results/" + display)
                 # A collected source snapshot takes precedence. Add only missing
                 # instructions/support files under an explicit export-time label.
                 prefix = "export-time-extras/" if collected_source else "source/"
@@ -807,7 +858,7 @@ def create_app(results_root: Path | None = None, repo: Path = REPO):
                     for relative in json.loads(seal.read_text(encoding="utf-8"))["files"]:
                         sealed.add("results/" + (seal.parent / relative).relative_to(root).as_posix())
                 altered_sealed = sorted(sealed.intersection(altered))
-                provenance = {"schema": "dashboard-export-provenance-v1", "altered_files": altered,
+                provenance = {"schema": "dashboard-export-provenance-v1", "batch_quality": quality, "altered_files": altered,
                               "altered_sealed_members": altered_sealed,
                               "original_raw_manifests_preserved": not any(name.endswith("/raw-manifest.json") for name in altered),
                               "missing_sealed_members": sorted(sealed.difference(manifest)),

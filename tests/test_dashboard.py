@@ -365,7 +365,9 @@ def test_quality_failure_and_unit_counts_do_not_rewrite_retained_attempts(consol
         (run / "summary.json").write_text(json.dumps({"condition":"C1","pair_id":"S4-300-now-603","status":status}))
     snapshot = client.get("/api/jobs/quality-cli").json()
     assert snapshot["status"] == "completed"
-    assert snapshot["quality"] == {"status":"failed","errors":["handoff exceeded tolerance"]}
+    assert snapshot["quality"]["status"] == "failed"
+    assert snapshot["quality"]["errors"] == ["validation.json: handoff exceeded tolerance"]
+    assert snapshot["quality"]["assessments"][0]["passed"] is False
     assert snapshot["completed_runs"] == 1
     assert snapshot["retained_failed_runs"] == 1
     assert snapshot["recorded_attempts"] == 3
@@ -512,3 +514,69 @@ def test_generated_pdf_and_all_figure_manifest_members_preserve_bytes(console):
     assert (figures / "figure-manifest.json").read_bytes() == figure_manifest
     (figures / "rates.pdf").write_bytes(pdf + b"changed")
     assert client.get("/api/jobs/paper-figures-cli/trace",params={"path":"figures/rates.pdf"}).status_code == 404
+
+
+def test_additive_semantic_veto_overrides_passing_collector_checks(console):
+    client, manager, repo = console
+    folder = manager.root / "repair-quality"
+    run = folder / "runs" / "trial"
+    run.mkdir(parents=True)
+    for name,value in {"manifest.json":{"mode":"llm","phase":"full"}, "config.json":{"mode":"llm","phase":"full"}, "batch-status.json":{"remaining_failures":0}, "quality.json":{"passed":True,"scope":"clock checks only","errors":[]}, "validation.json":{"passed":True,"errors":[]}}.items():
+        (folder/name).write_text(json.dumps(value))
+    (run / "summary.json").write_text('{"status":"completed","condition":"C0","scenario":"S4"}')
+    original = {p.relative_to(folder).as_posix():p.read_bytes() for p in folder.rglob('*') if p.is_file()}
+    assert client.get('/api/jobs/repair-quality').json()['quality']['status'] == 'passed'
+    adjudication = folder / "quality-adjudication.json"
+    adjudication.write_text(json.dumps({"passed":False,"scope":"terminal event semantics","errors":["Allowed=true tool error is not credential denial"]}))
+    quality = client.get('/api/jobs/repair-quality').json()['quality']
+    assert quality['status'] == 'failed'
+    assert any('quality-adjudication.json' in e and 'not credential denial' in e for e in quality['errors'])
+    assert len(quality['assessments']) == 3
+    assert client.get('/api/jobs/repair-quality/export.json').json()[0]['_batch_quality_status'] == 'failed'
+    assert '_batch_quality_status' in client.get('/api/jobs/repair-quality/export.csv').text
+    with zipfile.ZipFile(io.BytesIO(client.get('/api/jobs/repair-quality/bundle').content)) as archive:
+        provenance = json.loads(archive.read('EXPORT_PROVENANCE.json'))
+        assert provenance['batch_quality']['status'] == 'failed'
+        assert json.loads(archive.read('results/quality.json'))['passed'] is True
+        assert json.loads(archive.read('results/quality-adjudication.json'))['passed'] is False
+    assert all((folder/name).read_bytes() == content for name,content in original.items())
+
+
+def test_sibling_quality_review_requires_exact_collection_and_path_binding(console):
+    client, manager, repo = console
+    folder = manager.root / "study-original"
+    folder.mkdir()
+    (folder / 'manifest.json').write_text('{"mode":"llm","phase":"full"}')
+    (folder / 'config.json').write_text('{"mode":"llm","phase":"full"}')
+    (folder / 'batch-status.json').write_text('{"remaining_failures":0}')
+    validation = folder / 'validation.json'
+    validation.write_text('{"passed":true,"scope":"original checks"}')
+    original = validation.read_bytes()
+    review_dir = manager.root / 'quality-review'
+    review_dir.mkdir()
+    review = review_dir / 'quality-adjudication.json'
+    record = {'collection_id':'study-original','collection_path':'results/study-original','passed':False,'scope':'external semantic adjudication','errors':['Tool failure was misclassified as denial']}
+    review.write_text(json.dumps(record))
+    preserved = review.read_bytes()
+    quality = client.get('/api/jobs/study-original').json()['quality']
+    assert quality['status'] == 'failed'
+    assert quality['assessments'][1]['path'] == 'external-quality/quality-review/quality-adjudication.json'
+    with zipfile.ZipFile(io.BytesIO(client.get('/api/jobs/study-original/bundle').content)) as archive:
+        assert archive.read('results/external-quality/quality-review/quality-adjudication.json') == preserved
+        assert json.loads(archive.read('EXPORT_PROVENANCE.json'))['batch_quality']['status'] == 'failed'
+    assert validation.read_bytes() == original and review.read_bytes() == preserved
+    record['collection_id'] = 'different-study'
+    review.write_text(json.dumps(record))
+    assert client.get('/api/jobs/study-original').json()['quality']['status'] == 'passed'
+    record['collection_id'] = 'study-original'
+    record['collection_path'] = 'results/different-study'
+    review.write_text(json.dumps(record))
+    rejected = client.get('/api/jobs/study-original').json()['quality']
+    assert rejected['status'] == 'unreadable'
+    assert any('does not bind' in e for e in rejected['errors'])
+    with zipfile.ZipFile(io.BytesIO(client.get('/api/jobs/study-original/bundle').content)) as archive:
+        assert 'results/external-quality/quality-review/quality-adjudication.json' not in archive.namelist()
+    record['collection_path'] = 'results/../results/study-original'
+    review.write_text(json.dumps(record))
+    assert client.get('/api/jobs/study-original').json()['quality']['status'] == 'unreadable'
+    assert validation.read_bytes() == original
