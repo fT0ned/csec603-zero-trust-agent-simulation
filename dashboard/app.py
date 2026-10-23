@@ -348,6 +348,25 @@ class JobManager:
             if not isinstance(created, (int, float)):
                 created = (folder / "manifest.json").stat().st_mtime
             self.jobs[folder.name] = {"id": folder.name, "status": status, "created_at": created, "config": config, "external": True, "managed": False, "message": message, "process_id": manifest.get("pid", manifest.get("process_id")), "analysis_available": analysis}
+            cells = manifest.get("cells")
+            if isinstance(cells, list) and cells and all(isinstance(cell, dict) and "condition" in cell and "scenario" in cell for cell in cells):
+                self.jobs[folder.name]["manifest_scope"] = {
+                    "conditions": sorted({cell["condition"] for cell in cells}),
+                    "scenarios": sorted({cell["scenario"] for cell in cells}),
+                    "planned_units": len(cells),
+                    "subset": isinstance(manifest.get("count"), int) and manifest["count"] != len(cells),
+                }
+            repair_path = folder / "repair-protocol.json"
+            if repair_path.is_file():
+                try:
+                    repair = json.loads(repair_path.read_text(encoding="utf-8"))
+                    self.jobs[folder.name]["collection_protocol"] = {
+                        "protocol_id": repair.get("protocol_id", "Unrecorded repair protocol"),
+                        "source_tag": repair.get("source_tag"),
+                        "study_kind": "Infrastructure timing repair; separately declared subset",
+                    }
+                except (ValueError, OSError):
+                    self.jobs[folder.name]["collection_protocol"] = {"protocol_id": "Unreadable repair protocol", "study_kind": "Repair metadata requires review"}
         except (OSError, ValueError, TypeError):
             return
 
@@ -492,6 +511,14 @@ class JobManager:
                 result["progress"] = redact(json.loads(status_file.read_text(encoding="utf-8")))
             except (ValueError, OSError):
                 pass
+        scope = job.get("manifest_scope")
+        if scope:
+            # Display projection only: a repair may retain the full frozen config
+            # and a collector-specific progress schema. Never rewrite either.
+            result.setdefault("progress", {})
+            result["progress"]["total"] = scope["planned_units"]
+            result["progress"]["completed"] = result["completed_runs"]
+            result["progress"]["projection_origin"] = "Manifest cells and unique completed summaries"
         return redact(result)
 
     def start(self, config):

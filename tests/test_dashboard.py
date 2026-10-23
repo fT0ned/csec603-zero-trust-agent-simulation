@@ -388,6 +388,7 @@ def test_prompt_profile_and_extension_config_provenance(console):
         ExperimentConfig(system_prompt_profile="silent-fallback")
     with pytest.raises(ValidationError):
         ExperimentConfig(protocol_id="../../outside")
+
     (repo / "configs").mkdir()
     for name in ["neutral-pilot", "enforcement-stress"]:
         (repo / "configs" / (name + ".json")).write_text(config.model_dump_json(exclude_none=True))
@@ -398,6 +399,28 @@ def test_prompt_profile_and_extension_config_provenance(console):
     page = client.get("/").text
     assert 'id="system-prompt-profile"' in page
     assert 'id="quality-warning"' in page
+
+
+def test_repair_scope_and_progress_use_actual_manifest_without_changing_config(console):
+    client, manager, repo = console
+    folder=manager.root/'repair-subset';folder.mkdir()
+    contents={'manifest.json':{'count':1200,'mode':'llm','phase':'full','cells':[
+        {'condition':'C0','scenario':'S4'},{'condition':'C0','scenario':'S4'}]},
+        'config.json':{'mode':'llm','phase':'full','conditions':['C0','C1','C2'],'scenarios':['S1','S2','S3','S4','S5']},
+        'progress.json':{'terminal_futures':1,'planned_repair_units':2},
+        'repair-protocol.json':{'protocol_id':'repair-subset-v1','source_tag':'study-freeze-v2'}}
+    for name,data in contents.items():(folder/name).write_text(json.dumps(data))
+    run=folder/'runs'/'r1';run.mkdir(parents=True)
+    (run/'summary.json').write_text(json.dumps({'run_id':'r1','condition':'C0','scenario':'S4','status':'completed','pair_id':'S4-900-expiry-629'}))
+    before={name:(folder/name).read_bytes() for name in contents}
+    job=client.get('/api/jobs/repair-subset').json()
+    assert job['manifest_scope']=={'conditions':['C0'],'scenarios':['S4'],'planned_units':2,'subset':True}
+    assert job['progress']['total']==2 and job['progress']['completed']==1
+    assert job['progress']['terminal_futures']==1
+    assert job['config']['conditions']==['C0','C1','C2']
+    assert job['collection_protocol']['protocol_id']=='repair-subset-v1'
+    assert job['collection_protocol']['source_tag']=='study-freeze-v2'
+    assert before=={name:(folder/name).read_bytes() for name in contents}
 
 
 def test_clean_gzip_preserves_sealed_bytes_and_redaction_is_explicit(console, monkeypatch):

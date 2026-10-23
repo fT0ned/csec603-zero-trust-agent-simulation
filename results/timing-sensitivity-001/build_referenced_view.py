@@ -42,6 +42,8 @@ def selection():
             if key(row) in originals:raise ValueError('Duplicate original completed cell')
             originals[key(row)]=(path,row)
     if len(originals)!=1200:raise ValueError('Original matrix incomplete')
+    if len(manifest['cells'])!=1200 or len({key(cell) for cell in manifest['cells']})!=1200 or {key(cell) for cell in manifest['cells']}!=set(originals):
+        raise ValueError('Original manifest is not the exact unique completed matrix')
     candidates={}
     for name in ['timing-repair-001','timing-repair-002']:
         links=[__import__('json').loads(x) for x in (MAIN/'results'/name/'replacement-links.jsonl').read_text().splitlines()]
@@ -66,6 +68,7 @@ def selection():
             'summary_sha256':sha(path),'raw_manifest_sha256':sha(folder/'raw-manifest.json'),'original_run_id':original_id,'is_replacement':bool(choice)})
     counts={name:sum(x['source_collection']==name for x in rows) for name in ['study-002','timing-repair-001','timing-repair-002']}
     if counts!={'study-002':1168,'timing-repair-001':30,'timing-repair-002':2} or len(rows)!=1200:raise ValueError('Wrong declared source counts')
+    if len({row['source_run_id'] for row in rows})!=1200:raise ValueError('Selected run IDs are not unique')
     return rows,manifest
 
 
@@ -88,7 +91,7 @@ def build(analyze=False):
     else:
         raise ValueError('This validated view design uses Windows junctions; other platforms need a reviewed loader adapter')
     for name in ['config.json','freeze.json']:(VIEW/name).write_bytes((MAIN/'results/timing-repair-001'/name).read_bytes())
-    manifest={**base,'collection_name':'study-002-timing-amended','created_at':time.time(),'original_created_at':base['created_at'],
+    manifest={**base,'collection_name':'study-002-timing-sensitivity-001','created_at':time.time(),'original_created_at':base['created_at'],
       'amendment':'Conditional timing-repair view; not original frozen untouched collection','selection_ledger_sha256':sha(ledger),
       'original_manifest_sha256':sha(MAIN/'results/study-002/manifest.json'),'selection_plan_sha256':sha(OUT/'selection-plan.json')}
     write(VIEW/'manifest.json',manifest)

@@ -47,7 +47,8 @@ async function refreshJobs() {
       $("jobs").replaceChildren(...jobs.map(job => {
         const item = node("button", undefined, "job" + (job.id === selected ? " selected" : "")); item.type = "button";
         const header = node("div", undefined, "job-header"); header.append(node("span", job.id, "job-id"), statusBadge(job.status));
-        item.append(header, node("div", job.evidence_label + " · " + job.config.phase.toUpperCase(), "job-mode"), node("div", job.config.conditions.join(" / ") + " · " + job.config.scenarios.join(" / "), "job-meta"), node("div", job.completed_runs + (job.progress?.total ? " / " + job.progress.total : "") + " completed units · " + (job.retained_failed_runs ? job.retained_failed_runs + " retained failed attempt(s) · " : "") + job.message, "job-meta"));
+        const scope = job.manifest_scope || job.config;
+        item.append(header, node("div", job.evidence_label + " · " + job.config.phase.toUpperCase(), "job-mode"), node("div", scope.conditions.join(" / ") + " · " + scope.scenarios.join(" / ") + (scope.subset ? " · declared subset" : ""), "job-meta"), node("div", job.completed_runs + (job.progress?.total ? " / " + job.progress.total : "") + " completed units · " + (job.retained_failed_runs ? job.retained_failed_runs + " retained failed attempt(s) · " : "") + job.message, "job-meta"));
         if (job.quality?.status === "failed") item.append(node("div", "QUALITY ASSESSMENT FAILED · inspect preserved assessments", "job-meta"));
         const progress = node("progress", undefined, "progress-line"); progress.max = job.progress?.total || Math.max(1, job.completed_runs); if (job.progress || !isActive(job)) progress.value = job.progress?.completed ?? job.completed_runs; progress.setAttribute("aria-label", "Trial collection progress"); item.append(progress);
         item.addEventListener("click", () => selectJob(job.id)); return item;
@@ -62,7 +63,9 @@ async function refreshJobs() {
       $("quality-warning").hidden = !["failed", "unreadable", "unknown"].includes(quality);
       $("quality-warning").textContent = quality === "failed" ? "Quality validation FAILED. Collection completion does not establish valid findings. Inspect preserved quality assessments: " + (current.quality.errors || []).join("; ") : "Quality validation is unavailable or incomplete. Inspect preserved quality assessments.";
       const config = current.config;
-      $("collection-provenance").textContent = `Prompt: ${config.mode === "scripted" ? "not used (scripted)" : config.system_prompt_profile || "original-v1 (legacy default)"} · Protocol: ${config.protocol_id || "original (legacy default)"} · Study kind: ${config.study_kind || config.phase}`;
+      const protocol = current.collection_protocol || {};
+      const originalPrompt = protocol.source_tag === "study-freeze-v2" ? "original-v1 (frozen study-freeze-v2)" : "original-v1 (legacy default)";
+      $("collection-provenance").textContent = `Prompt: ${config.mode === "scripted" ? "not used (scripted)" : config.system_prompt_profile || originalPrompt} · Protocol: ${protocol.protocol_id || config.protocol_id || "original (legacy default)"} · Study kind: ${protocol.study_kind || config.study_kind || config.phase}`;
       if (lastRunCount !== current.completed_runs || lastJobStatus !== current.status || lastJobMessage !== current.message || lastQualityStatus !== current.quality?.status) { lastRunCount = current.completed_runs; lastJobStatus = current.status; lastJobMessage = current.message; lastQualityStatus = current.quality?.status; await loadEvidence(); }
       if (isActive(current) && $("trace-file").value === "runner.log") await loadTrace();
     }
