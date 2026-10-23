@@ -1,3 +1,9 @@
+# Additional verification —23October18:18UTC
+
+Four tests/test_endpoint_adjudication.py cases pass: finalrotatedtoolfailureveto, actualPArevocationraceaccessdenial(notJWTexpiry), stale-validwithoutdeclaredrevocationunresolved, rawbytealterationrejected. Newbundleverifier4testspass. Currentexpectedfullsuite92butNOTyetfullrerun (deferDockerOPAjobuntilallcollectionends).
+
+Metadataerratum002: rootcopied001manifestcount31 ratherthan2andparentJSONscope/tag/preparation/viewcontextfields. DoNOTeditfrozenJSON. results/timing-repair-002/metadata-clarification.json explicitlylistscopyingerrors, pinshash andpredataresolvingevidence: pushedstandaloneprotocol/exacttwo links/cells/subset_units2/workers2/prospectivetag/staticgate2/dispatcher2/selectionplanallocatestwo. No sample/securityoutcome/parameterchange. Discloseadministrativeinconsistencyinconditionalreport. ActualprocessobservationsPID23128venvlauncher +36316runtimechild creation17:51:06UTCpreservedseparately. Newcollectoractive97745, shortdone/longends~18:55; no servicechanges. CurrentmainHEAD e2cb5206pushedbeforelatesttests/erratum. BrowserIABrootdashboardTab/tab1working; preserveforfinalQA. Edgebindingfailedtwice; no nativeUIworkaround. Finalfullbundleverification/rebuild/liveverify/conditionalview/fullsuite/ledger/handoffpending.
+
 # Latest live QA and prospective fixes —23October18:11UTC
 
 repair002session97745 STILLRUNNING. Short900cell re53aeb361dcd4dee9616e273dbc7cdd0 completed18:10UTC, event_observedfalse,lastsuccess990.0315s, window990.25s; long3600 r85a4998c61074eeabde4495ec4dc82e1runningexpected~18:55UTC. No restart/rebuild/reset untilallcomplete. Do notmistakeearlysummary.json existence forcompleted status.
