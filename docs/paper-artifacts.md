@@ -8,16 +8,16 @@ This file supplies implementation-to-paper mappings and draft analytical artifac
 | --- | --- | --- |
 | Feedback response matrix | [Detailed source-page mapping](feedback-response-matrix.md), plus Appendix A summary below | Repository actions mapped to professor feedback; exact manuscript locations and final status remain pending |
 | Literature evidence matrix | [Standalone 16-entry matrix and authoritative foundations](literature-evidence-matrix.md), [32-reference verification register](reference-verification.md) | Includes method, findings, limits, original quality rating, evidence type and design justification; inaccessible primary claims remain explicitly unverified |
-| Comparative analysis table | Condition table below plus generated metrics/comparisons CSV | Insert measured cells only after collection and manifest verification |
+| Comparative analysis table | Condition table below; [scripted measured Tables E1–E3](enforcement-stress-findings.md); separate original/pilot CSV | Engineering effects verified against independent commits; preserve original real-model nulls and timing-quality veto |
 | Architecture/workflow diagram | [Deployed SVG](figures/deployed-architecture.svg), [editable Mermaid](figures/deployed-architecture.mmd), [implementation explanation](architecture.md) | Shows separate issuance/delegation, OPA PE→PA administration, gateway PEP mediation and actual PA tool dispatch, distinct attacks, and independent evidence boundaries |
 | Risk/control mapping | Table II below | Distinguish prevention, containment, detection and response |
 | Research-gap table | Table III below | Explain addressed scope and residual limitations |
 | Recommendation matrix | Table IV below | Separate measured support from architectural rationale |
 | Simulation design and RQ/hypothesis tables | [Numbered Tables VI–IX with frozen implementation links](experimental-design.md), frozen manifest and analysis plan | Report exact versions, model settings, timing, run count, thresholds, reset procedure and interrupted-collection boundary |
-| Results tables/plots | `analysis/results.md`, CSV, JSON and standalone SVG | Confirm no mixed modes or pilot/full results; interpret null results |
+| Results tables/plots | [Original-agent diagnosis](diagnosis-original-agent.md), [neutral pilot](neutral-pilot-findings.md), [scripted stress Tables E1–E5](enforcement-stress-findings.md), [claim boundaries](new-study-interpretation.md); cohort-specific reports and SVG/PDF/PNG | Real-model no-attempt findings, scripted enforcement effects and original timing-quality veto remain distinct; no pooled or retrospective confirmatory claim |
 | Threats-to-validity table | Table V below | Include dataset bias, model version, attribution assumptions and single-machine constraints |
 
-The ten artifact categories have repository source material. This does not mean ten finalized manuscript artifacts: comparison/recommendation/results cells await verified full-study evidence, bibliography verification remains partial where primary access failed, and all final manuscript locations/captions/body discussion require integration. The literature and feedback documents above were prepared during collection without modifying the frozen protocol or claiming full-study outcomes.
+The ten artifact categories have repository source material. This does not mean ten finalized manuscript artifacts: the original full collection has a preserved timing-quality veto; the separately validated neutral pilot retains null injection findings; and the completed scripted extension supplies engineering enforcement effects only. Comparison and recommendation text must identify those evidence classes. Bibliography verification remains partial where primary access failed, and all final manuscript locations/captions/body discussion require integration. Documentation and postcollection derivations do not modify frozen protocols or raw observations.
 
 ## Table I Comparative condition design authors’ work
 
@@ -69,16 +69,16 @@ Table III identifies the part of each gap the implemented study can address. Whe
 
 | Priority | Recommendation | Evidence to cite | Expected outcome | Prerequisite and implementation risk |
 | --- | --- | --- | --- | --- |
-| 1 | Enforce task and action scope at every tool gateway | Architectural rationale; add S2/S3 measured contrasts when available | Reduces excessive reachable authority | Trusted delegation, complete mediation; policy mistakes can deny legitimate work |
+| 1 | Enforce task and action scope at every tool gateway | Guidance plus scripted S2 scope/recipient checks in Table E2; fresh-task reachable authority9 versus3 | Reduces excessive reachable authority in tested probes | Trusted delegation, complete mediation; real-model harmful-action contrast remained unexercised |
 | 1 | Operate revocation separately from lifetime | Bearer-token semantics; add S4 measured timings | Faster response to detected theft | Reliable deny-list distribution; distributed propagation remains unmeasured here |
 | 1 | Protect PE, PA, PEP, issuer, delegation and telemetry | Professor feedback and stated trust boundaries | Reduces control-plane attack surface | Separation of duties and hardened infrastructure; control-plane compromise outside this study |
-| 2 | Bound cumulative workflow authority atomically | Add S5 C2/noWF effect with intervals | Contains chained-action blast radius | Correct cross-tool totals and retry semantics; contention and failed reservations |
+| 2 | Bound cumulative workflow authority atomically | Scripted Table E3: C2 retained10records, noWF reached20;15-run intervals reported | Contains the tested chained-export outcome | Correct cross-tool totals and retry semantics; no natural LLM chain occurred |
 | 2 | Use short-lived workload identities where issuance is reliable | SPIFFE/SPIRE guidance; add S3 observed/censored exposure | Limits residual credential life | Attestation and rotation availability; stolen bearer credentials still replay |
-| 2 | Require meaningful approval for selected high-impact actions | Add approval-dependent C2/RS results | Prevents intent violations when review is reliable | Idealized reviewer here; approval fatigue and real human behavior unmeasured |
+| 2 | Require meaningful approval for selected high-impact actions | Scripted Tables E2/E3 distinguish careful refusals from RS intent harm and retained total bound | Prevents tested intent violations when simulated review is reliable | Idealized reviewer here; approval fatigue and real human behavior unmeasured |
 | 2 | Bind telemetry to principal, agent, delegation, origin and action | Add S1/S2/S3 attribution confusion and false alarms | Supports distinct coercion/impersonation responses | Trusted provenance and protected logs; observational links can be ambiguous |
 | 3 | Anchor audit hash/count checkpoints separately | Add tamper-copy test outputs | Detects changed/reordered/truncated history | Store isolation and checkpoint durability; chain checks do not prevent compromise |
 
-Table IV prioritizes recommendations by architectural necessity and implementation dependency. Replace “add” entries with the exact run IDs/table locations after evidence exists. Recommendations based on guidance must remain labeled as guidance.
+Table IV prioritizes recommendations by architectural necessity and implementation dependency. Measured scripted references point to [Tables E2/E3](enforcement-stress-findings.md); they are engineering evidence only. Remaining “add” entries require exact run IDs/table locations and the original study's timing-quality qualification before manuscript integration. Recommendations based on guidance remain labeled as guidance.
 
 ## Table V Threats to validity authors’ work
 
@@ -110,8 +110,8 @@ Table V bounds interpretation of every result. A measured effect in this testbed
 | Separate authenticity from action legitimacy | Distinct S2 coercion and S3 replay; attribution scoring versus independent truth | Pending measured results and manuscript integration |
 | Add dedicated enterprise recommendations and matrix | Table IV draft with prerequisites and implementation risk | Pending author review and manuscript section 13 |
 | Complete architecture, comparison and risk mapping | Deployed SVG/editable Mermaid, Tables I/II and `docs/architecture.md` | Deployed topology and controls verified in `docs/verification`; manuscript figure integration remains pending |
-| Evaluate cumulative workflow authority | S5/noWF comparison defined in analysis plan | Pending full empirical collection |
-| Approval prevents only with reliable review | Approval-dependent C2/RS strata; idealized-approver limitation | Pending empirical collection |
+| Evaluate cumulative workflow authority | Original real-model no-attempt result preserved; separate scripted S5/noWF effect documented in Table E3 | Engineering evidence available; manuscript integration pending; original quality veto retained |
+| Approval prevents only with reliable review | Separate scripted C2/RS effects, primary-versus-intent distinction and idealized-approver limitation | Engineering evidence available; real-model prevention remains unexercised; manuscript integration pending |
 | Protect the critical control plane | Explicit boundaries and Table II/IV guidance | Repository isolation/configuration verified in `docs/verification`; manuscript integration remains pending and control-plane compromise is outside scope |
 | Add abbreviations and academic-language fixes | Carry forward official writing checklist | Pending manuscript-wide edit; no completion claimed |
 | Audit IEEE references and preprints | Preserve evidence classifications and verify metadata | Pending bibliography audit |

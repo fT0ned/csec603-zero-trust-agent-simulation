@@ -33,7 +33,7 @@ from starlette.background import BackgroundTask
 REPO = Path(__file__).resolve().parents[1]
 STATIC = Path(__file__).parent / "static"
 ALLOWED_SUFFIXES = {".json", ".jsonl", ".gz", ".csv", ".svg", ".png", ".jpg", ".jpeg", ".md", ".mmd", ".txt", ".log", ".rego", ".yaml", ".yml", ".toml", ".py", ".html", ".css", ".js", ".ps1", ".sh", ".conf"}
-TERMINAL = {"completed", "failed", "cancelled", "interrupted"}
+TERMINAL = {"completed", "failed", "cancelled", "interrupted", "prepared"}
 
 
 def load_local_env(repo: Path):
@@ -319,6 +319,9 @@ class JobManager:
                 else:
                     status = "unknown"
                     message = "CLI completion metadata is incomplete; inspect batch-status.json"
+            if (folder / "repair-protocol.json").is_file() and not (folder / "started.json").exists() and not (folder / "runs").exists():
+                status = "prepared"
+                message = "Protocol prepared; no trials started"
             created = manifest.get("created_at")
             if not isinstance(created, (int, float)):
                 created = (folder / "manifest.json").stat().st_mtime

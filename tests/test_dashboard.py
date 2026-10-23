@@ -445,3 +445,27 @@ def test_clean_gzip_preserves_sealed_bytes_and_redaction_is_explicit(console, mo
     assert (run / "audit.jsonl.gz").read_bytes() == clean
     assert (run / "actions.jsonl.gz").read_bytes() == changed
     assert (run / "raw-manifest.json").read_bytes() == raw_manifest
+
+
+def test_prepared_repair_protocol_is_inactive_and_preserved(console, monkeypatch):
+    client, manager, repo = console
+    folder = manager.root / "prepared-repair"
+    folder.mkdir()
+    for name, value in {"manifest.json":{"mode":"llm","phase":"full"}, "config.json":{"mode":"llm","phase":"full"}, "repair-protocol.json":{"prepared":True}}.items():
+        (folder/name).write_text(json.dumps(value))
+    original = {p.name:p.read_bytes() for p in folder.iterdir()}
+    job = client.get("/api/jobs/prepared-repair").json()
+    assert job["status"] == "prepared"
+    assert job["message"] == "Protocol prepared; no trials started"
+    assert job["completed_runs"] == 0
+    assert client.post("/api/reset").status_code == 200
+    monkeypatch.setattr(manager, "_command", lambda *_:0)
+    started = client.post("/api/jobs", json={"conditions":["C0"],"scenarios":["S1"]})
+    assert started.status_code == 202
+    wait_finished(client, started.json()["id"])
+    assert {p.name:p.read_bytes() for p in folder.iterdir()} == original
+    (folder / "started.json").write_text('{"started":true}')
+    assert client.get("/api/jobs/prepared-repair").json()["status"] == "running"
+    (folder / "started.json").unlink()
+    (folder / "runs").mkdir()
+    assert client.get("/api/jobs/prepared-repair").json()["status"] == "running"
