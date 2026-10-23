@@ -1,0 +1,51 @@
+# Phase 2 research testbed handoff
+
+Draft status: enforcement collections and dashboard workflow verified; separately declared31-cell timing repair is running. Final timing judgment, complete-study bundle and current-image verification will be recorded before delivery. Original failed timing validation remains preserved regardless of the repair outcome.
+
+## Start and inspect
+
+1. In PowerShell, change to `C:\Users\vt0ned\Desktop\RITMain\0Fall2026\CSEC603-EnterpriseSecurity\ResearchPaper\Phase2\GithubRepoLive`. Start Docker Desktop. For a fresh environment use `powershell -ExecutionPolicy Bypass -File scripts/setup.ps1`; the pinned dependency lock and actual SPIRE/OPA/services are installed by the tested setup flow. Preserve existing private configuration and spending ledger.
+2. If already running, open http://127.0.0.1:8765. Otherwise run `powershell -ExecutionPolicy Bypass -File scripts/launch.ps1` and leave its terminal running. Current host dashboard PID14468. Gateway and PA health endpoints bind loopback8766/8767. Do not start a second dashboard listener on the same port.
+3. Select a collection to inspect progress, comparisons, action/policy/audit traces and provider interactions. Mode/profile/protocol labels distinguish real LLM from scripted checks. Collection completion and quality validation are separate. Reset clears console selection and preserves results. CLI collections are observed read-only; stop them only through their original process, never by a global reset during collection.
+4. Download CSV/JSON, generated figures and the reproducibility ZIP for the selected completed collection. Verify exported checksums and raw seals after extraction. Source snapshots take priority over export-time support files. Any necessary redaction is identified explicitly and can invalidate the original seal for that exported member without changing local raw data.
+
+## What ran and what it supports
+
+| Collection | Evidence and location | Interpretation |
+| --- | --- | --- |
+| Original final `results/study-002` |1200 real-LLM units plus one retained infrastructure original and successful linked retry; unchanged study-freeze-v2 | All original data and null findings preserved. Four handoff timing failures and31 clock-event-overlap flags veto unqualified timing confirmation. Original structural reports are reproducible but do not override failed quality |
+| `results/neutral-pilot-001` |36 real-LLM exploratory units; validation passed; exact shared neutral system prompt in109 requests | All24 attack trials saw and rejected payloads without harmful calls. All36 legitimate tasks completed. This does not exercise gateway prevention against harmful model calls |
+| `results/enforcement-stress-002` |390 scripted engineering units; validation passed4590 sealed files and independent committed-effect reconciliation | Each of C0/C1 committed120/120 harmful requests; C2 committed0/120. noWF exposed extra exports; RS exposed in-scope intent violations. These are forced enforcement checks, not natural LLM susceptibility |
+| `results/authorized-action-controls` |17 isolated cases/34 actual gateway requests/19 committed effects/15 expected denials | Exact payload actions execute when explicitly authorized; the controls do not simply make risky tools unusable. Cumulative bounds and exact approval multiplicity remain enforced |
+| `results/timing-repair-001` |31 prespecified real-LLM timing replacements under timing-repair-v2; running at preparation | Same original code/config/cells/seeds, real lifetimes and fixed handoff; extra infrastructure clock monitoring. Any amended view requires accepted quality and explicit source-selection ledger; original reports are never rewritten |
+
+Read [measured stress findings](enforcement-stress-findings.md), [neutral findings](neutral-pilot-findings.md), [original-agent diagnosis](diagnosis-original-agent.md), [original quality review](study002-quality-review.md), [extension protocol](enforcement-extension-protocol.md), [timing amendment](timing-repair-protocol.md) and [terminology clarifications](protocol-clarifications.md).
+
+The architecture evidence answers the user's intended question: an authentic, valid agent credential can still request actions outside principal intent. Broad C0/C1 authority allowed the forced actions; C2's task scope, careful approval and cumulative workflow controls stopped their respective attack subsets. noWF permitted20 exported records versus C2's10. RS allowed two40-unit split payments before the100-unit workflow bound stopped further payments: total80 does not exceed the primary total endpoint, although those payments violate principal intent. The endpoints remain separate.
+
+C0 uses a non-expiring static key; configured900-second design labels apply to SPIRE credential issuance in the identity conditions. An issued JWT-SVID remains a bearer credential and does not by itself prevent replay of a stolen copy. The testbed uses real identity/policy/network/tool boundaries with synthetic state; no external email or money is sent.
+
+## Reproduce analysis without paid calls
+
+1. Run `.venv/Scripts/python.exe -m analysis.cli --input results/study-002 --output .runtime/reproduced-original-analysis --verify-raw`. The unchanged frozen analyzer reproduced all12 original artifacts byte-for-byte in the verified local environment. Preserve original `validation.json` and apply its quality veto.
+2. Run `.venv/Scripts/python.exe -m analysis.enforcement --input results/neutral-pilot-001 --output .runtime/reproduced-neutral-enforcement`, then the analogous command for `results/enforcement-stress-002`. Inspect `report.json.errors` and reconciled denominators before interpretation. Each collection remains separate; seven descriptive report files reproduced byte-identically.
+3. Run `.venv/Scripts/python.exe scripts/plot_enforcement.py --report results/enforcement-stress-002/enforcement/report.json --output .runtime/reproduced-stress-figures`. Use the analogous neutral report independently. Each produces SVG/PDF/PNG and tidy endpoint/metric tables with cohort/mode labels, Wilson intervals, and source hashes. Thirteen artifacts reproduced byte-identically in the verified environment; absolute provenance paths or platform newline contracts can differ on a different machine.
+4. Run `.venv/Scripts/python.exe -m scripts.validate_collection --input results/neutral-pilot-001` or the scripted collection to check the full matrix/raw seals/oracle/tamper/metadata consistency. Reanalysis and validation incur no provider charges. Use a fresh output for reproduced analysis; do not replace preserved original reports when auditing them.
+5. Timing-repair analysis remains pending quality review. The prepared rebuild script uses an ignored transient reference view, portable source-selection ledger and unchanged frozen analyzer. Follow the exact amendment instructions; never pool completed originals and replacements through ordinary earliest-terminal deduplication.
+6. For new data collection, follow the [numbered runbook](runbook.md). The original complete protocol requires an unchanged study-freeze-v2 checkout. Canonical extension replications use the pushed enforcement-extension-v1 seal and `scripts.collect_enforcement`; source changes or a new confirmatory protocol require a separate precollection freeze. Keep the existing aggregate budget ledger and choose fresh output directories.
+
+## Paper-ready evidence and limits
+
+Use each collection's `analysis/`, `enforcement/` and `figures/` directories, the per-run sealed `runs/` evidence, source/config/manifest/freeze files, and [paper artifact mappings](paper-artifacts.md). Full denominator and uncertainty tables remain per payload/condition. Action counts are descriptive counts, not independent statistical trials. Reachability covers nine catalog actions on fresh task namespaces, not the entire parameter space. Attribution is evaluated against defined harness truth/provenance, not a measure of a model's internal cause. Approval is an idealized simulated reviewer, not human accuracy or human waiting time. Cost figures are token-rate calculations/ceilings and rounded balances, not exact invoices.
+
+The model alias is mutable; preserved transcripts/raw records permit deterministic reanalysis but cannot guarantee identical future model weights or responses. The fixed small task/payload catalog, single host/agent, trusted control plane, selected conditions and concurrency limit enterprise generalization. Real-model null findings and scripted enforcement findings remain distinct; scripted effects do not retrospectively confirm the original real-LLM hypotheses. Timing amendment judgments remain conditional.
+
+Before the final paper, integrate the actual RQ-specific judgments and all negative findings into the existing manuscript, use exact original RQ wording, verify outstanding bibliography/full-text claims and professor-email/Overleaf-specific locations, complete the feedback matrix with actual manuscript changes, and check the final PDF/IEEE formatting and authors' contribution statements. This implementation handoff does not claim those manuscript or submission actions were completed.
+
+## External requirement and budget
+
+GitHub-hosted secret scanning is disabled/unavailable for this private user-owned repository despite verified administrator access. Owner-controlled eligible hosting/entitlement is required; exact evidence and unblock steps are in [the GitHub setting report](verification/github-secret-scanning.md). No repository visibility/ownership or billing change was made. Local exact-secret scans passed before pushes but do not satisfy that hosted requirement.
+
+Established total provider cap remains4USD through the shared ignored SQLite ledger. Before timing repair,4534 requests were settled at aggregate0.549341754USD with no uncertain reservations. A final balance/ledger snapshot will be linked after collection; no cap increase, new ledger or fallback is allowed. Provider/admin keys and bootstrap material remain outside Git.
+
+Final release tags, current live verification, timing-repair judgment and clean-sync confirmation: pending completion of the running repair and final checks. See [durable progress](progress.md) for exact active process/status paths.

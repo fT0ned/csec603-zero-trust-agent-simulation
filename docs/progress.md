@@ -1,3 +1,11 @@
+# ACTIVE COLLECTION: timing repair
+
+Repair ACTUALLY RUNNING: session28537, launched13:38:02UTC23October under pushed timing-repair-v2/ddbee317. results/timing-repair-001/started.json exists,31runfolderscreated,preflightPASSED,initialclockbracketspassed. Do NOTlaunchotherexperiments/rebuild/reset/restartservices/runheavyexports/modifyfrozenrepairsource/config. About65-75min realruntime; longestexpectedfinish~14:42UTC. Originalfrozenv2 run_one/config/model/prompt/controls unchanged;31prespecifiedsamecell/seed replacements,oneattempteach. Continuousclockmonitorwritesownbrackets/events. Infraagentread-onlymonitoring saveddata; rootdoesindependentdocs.
+
+V1preflight halted0trials dueCRLF/LFbytecontract mismatch; archivedpreflight-attempts/v1 plusv2sourcecomparison proof. Newv2preflightchecks actualdeployedbytes=originalcapturedbytes=predeclaredhash AND frozenhostnormalizedtextequality; noSUT/source/imagebytechange. All31dataundercohorttiming-repair-001;v1tagimmutable. LauncherSHAa0ab43bc0a717ae70004ea255b40bd24f4d9ee9887044e078d72759fef49b63b; protocolSHA69f3a545fba8f4c5b01751c4771e3b0300fc42867b29cd44b95f85244ad558e9. Nevereditgatesafteroutcomes; failuresretained/noretry.
+
+Stress390/findings/dashboardQA pushedcb69e5f2;preflightv2ddbee317. DashboardPID14468/session25546 stableloopback8765. NeutralZIPsource/rawanalysisworkflowandmanagedC2/S1Start/Resetpass. FinalfulloriginalZIP/rebuild-current-image/liveverificationONLYAFTERrepairfinish. Mainnotes/lateengineeringcompletedJPGmaybeuncommitted; finalclean/syncpending. Rootawaitsactualqualitybeforeacceptedrepair-review/view. Originalfailedvalidationneverrewritten.
+
 # Latest preflight checkpoint
 
 13:33UTC timing-repair-v1 preflight halted BEFORE anytrial: originaldeployedclient.py bytes equalpreservedstudy002source, butGitcheckoutusesLFvsoriginalCRLF. Otherfourcheckedservicebytesmatch. No started.json/runs created; no modelcalls/reservations. Infraagentpreparesdocumentedprecollectionv2verifier amendment: deployedbytesmustmatchoriginalsnapshot AND frozenhosttext normalizedequality; no SUT/control/config/timing/cellchange. Preservev1preflight/launchreviewandimmutabletag. Rootwillcommitpushnewtiming-repair-v2tagbeforeexecute. DashboardQAcleared/currentPID14468; noactivecollectors.

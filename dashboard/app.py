@@ -32,7 +32,7 @@ from starlette.background import BackgroundTask
 
 REPO = Path(__file__).resolve().parents[1]
 STATIC = Path(__file__).parent / "static"
-ALLOWED_SUFFIXES = {".json", ".jsonl", ".gz", ".csv", ".svg", ".png", ".jpg", ".jpeg", ".md", ".mmd", ".txt", ".log", ".rego", ".yaml", ".yml", ".toml", ".py", ".html", ".css", ".js", ".ps1", ".sh", ".conf"}
+ALLOWED_SUFFIXES = {".pdf", ".json", ".jsonl", ".gz", ".csv", ".svg", ".png", ".jpg", ".jpeg", ".md", ".mmd", ".txt", ".log", ".rego", ".yaml", ".yml", ".toml", ".py", ".html", ".css", ".js", ".ps1", ".sh", ".conf"}
 TERMINAL = {"completed", "failed", "cancelled", "interrupted", "prepared"}
 
 
@@ -131,19 +131,41 @@ def sealed_checkpoint(root: Path, candidate: Path) -> bool:
         return False
 
 
+def generated_pdf(root: Path, candidate: Path) -> bool:
+    """Allow only generated figures whose bytes match their local figure manifest."""
+    parts = candidate.relative_to(root.resolve()).parts
+    if len(parts) != 2 or parts[0] != "figures" or candidate.suffix != ".pdf":
+        return False
+    try:
+        manifest = (candidate.parent / "figure-manifest.json").resolve()
+        if not manifest.is_relative_to(root.resolve()) or manifest.stat().st_size > 1024 * 1024:
+            return False
+        expected = json.loads(manifest.read_text(encoding="utf-8"))["exports"].get(candidate.name)
+        with candidate.open("rb") as stream:
+            if stream.read(5) != b"%PDF-":
+                return False
+            stream.seek(0)
+            actual = hashlib.file_digest(stream, "sha256").hexdigest()
+        return isinstance(expected, str) and actual == expected
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return False
+
+
 def safe_file(root: Path, relative: str) -> Path:
     candidate = (root / relative).resolve()
     if not candidate.is_relative_to(root.resolve()) or not candidate.is_file():
         raise HTTPException(404, "File not found")
     if (candidate.suffix not in ALLOWED_SUFFIXES and candidate.name != "Dockerfile" and not sealed_checkpoint(root, candidate)) or any(x.startswith(".") for x in candidate.relative_to(root.resolve()).parts):
         raise HTTPException(404, "File not exportable")
+    if candidate.suffix == ".pdf" and not generated_pdf(root, candidate):
+        raise HTTPException(404, "Only manifest-bound generated PDF figures are exportable")
     if candidate.suffix == ".gz" and not candidate.name.endswith(".jsonl.gz"):
         raise HTTPException(404, "Only compressed JSONL evidence is exportable")
     return candidate
 
 
 def sanitized_bytes(path: Path) -> bytes:
-    if path.suffix in {".png", ".jpg", ".jpeg"}:
+    if path.suffix in {".png", ".jpg", ".jpeg", ".pdf"}:
         return path.read_bytes()
     content = path.read_bytes().decode("utf-8", errors="replace")
     try:
@@ -187,7 +209,7 @@ def sanitized_chunks(path: Path, secret_values=None):
     if path.stat().st_size <= chunk_size:
         yield sanitized_bytes(path)
         return
-    if path.suffix in {".png", ".jpg", ".jpeg"}:
+    if path.suffix in {".png", ".jpg", ".jpeg", ".pdf"}:
         with path.open("rb") as stream:
             while data := stream.read(chunk_size):
                 yield data
@@ -676,7 +698,7 @@ def create_app(results_root: Path | None = None, repo: Path = REPO):
         else:
             # The browser lists batch/analysis files first and loads one run's
             # rotated traces on demand, avoiding tens of thousands of options.
-            candidates = [*root.iterdir(), *(root / "analysis").rglob("*")]
+            candidates = [*root.iterdir(), *(root / "analysis").rglob("*"), *(root / "figures").rglob("*"), *(root / "enforcement").rglob("*")]
         for path in sorted(candidates):
             if not path.is_file():
                 continue
@@ -705,7 +727,7 @@ def create_app(results_root: Path | None = None, repo: Path = REPO):
             content = bytes(content)
         else:
             content = sanitized_bytes(file)
-        media_type = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml"}.get(file.suffix, "text/plain; charset=utf-8")
+        media_type = {".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".svg": "image/svg+xml"}.get(file.suffix, "text/plain; charset=utf-8")
         return Response(content, media_type=media_type)
 
     @app.get("/api/jobs/{job_id}/export.json")

@@ -469,3 +469,46 @@ def test_prepared_repair_protocol_is_inactive_and_preserved(console, monkeypatch
     (folder / "started.json").unlink()
     (folder / "runs").mkdir()
     assert client.get("/api/jobs/prepared-repair").json()["status"] == "running"
+
+
+def test_generated_pdf_and_all_figure_manifest_members_preserve_bytes(console):
+    import hashlib
+    client, manager, repo = console
+    folder = manager.root / "paper-figures-cli"
+    figures = folder / "figures"
+    figures.mkdir(parents=True)
+    (folder / "manifest.json").write_text('{"mode":"llm","phase":"pilot"}')
+    (folder / "config.json").write_text('{"mode":"llm","phase":"pilot"}')
+    (folder / "batch-status.json").write_text('{"remaining_failures":0}')
+    # Binary bytes that cannot survive UTF-8 decode; >1 MB exercises streaming.
+    pdf = b"%PDF-1.7\n%" + bytes(range(256)) * 5000 + b"\n%%EOF\n"
+    contents = {"rates.pdf":pdf, "rates.png":b"\x89PNG\r\n\x1a\n\xff\xfe", "rates.svg":b'<svg xmlns="http://www.w3.org/2000/svg"/>', "endpoint-rates.csv":b"condition,n\nC2,4\n", "descriptive-run-metrics.csv":b"condition,median\nC2,2.0\n", "cohort-labels.csv":b"mode,phase\nllm,pilot\n", "README.md":b"Generated figures.\n"}
+    exports = {}
+    for name, content in contents.items():
+        (figures/name).write_bytes(content)
+        exports[name] = hashlib.sha256(content).hexdigest()
+    figure_manifest = json.dumps({"kind":"postcollection", "exports":exports},indent=2).encode()
+    (figures / "figure-manifest.json").write_bytes(figure_manifest)
+    (folder / "unscoped.pdf").write_bytes(pdf)
+    (figures / "unlisted.pdf").write_bytes(pdf)
+    response = client.get("/api/jobs/paper-figures-cli/trace",params={"path":"figures/rates.pdf"})
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.content == pdf
+    listed = {item["path"] for item in client.get("/api/jobs/paper-figures-cli/files?include_runs=false").json()}
+    assert "figures/rates.pdf" in listed and "figures/unlisted.pdf" not in listed
+    assert client.get("/api/jobs/paper-figures-cli/trace",params={"path":"unscoped.pdf"}).status_code == 404
+    exported = client.get("/api/jobs/paper-figures-cli/bundle")
+    with zipfile.ZipFile(io.BytesIO(exported.content)) as archive:
+        sealed = json.loads(archive.read("results/figures/figure-manifest.json"))["exports"]
+        sums = json.loads(archive.read("SHA256SUMS.json"))
+        for name, expected in sealed.items():
+            member = "results/figures/" + name
+            assert archive.read(member) == contents[name]
+            assert hashlib.sha256(archive.read(member)).hexdigest() == expected == sums[member]
+        provenance = json.loads(archive.read("EXPORT_PROVENANCE.json"))
+        assert "results/figures/rates.pdf" not in provenance["altered_files"]
+    assert (figures / "rates.pdf").read_bytes() == pdf
+    assert (figures / "figure-manifest.json").read_bytes() == figure_manifest
+    (figures / "rates.pdf").write_bytes(pdf + b"changed")
+    assert client.get("/api/jobs/paper-figures-cli/trace",params={"path":"figures/rates.pdf"}).status_code == 404

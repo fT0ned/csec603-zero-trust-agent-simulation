@@ -115,6 +115,11 @@ async function loadTrace() {
   const plot = /\.(png|jpg|jpeg|svg)$/.test(file);
   $("trace-image").hidden = !plot; $("trace-content").hidden = plot;
   if (plot) { $("trace-image").src = url; return; }
+  if (file.endsWith(".pdf")) {
+    const link = node("a", "Open or download the preserved PDF figure");
+    link.href = url; link.target = "_blank"; link.rel = "noopener";
+    $("trace-content").replaceChildren(link); return;
+  }
   try {
     const response = await fetch(url); let content = await response.text();
     if (file.endsWith(".json")) { try { content = JSON.stringify(JSON.parse(content), null, 2); } catch (_) {} }
