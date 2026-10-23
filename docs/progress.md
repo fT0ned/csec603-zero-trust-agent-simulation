@@ -1,4 +1,20 @@
+# Latest execution checkpoint
+
+Neutralpilot36/36 COMPLETE, validationpassed/rawverified/reconciledreport0errors. Zero harmful attempts/effects, all36legittaskscomplete; exacttranscriptdiagnosis pendinganalysisagent. Preserve negative finding, no prompt/modeltuning.
+
+Scripted stress390 ACTIVE: `.venv/Scripts/python.exe -m scripts.collect_enforcement stress --output results/enforcement-stress-002`, session14854. Do not rebuild/resetcontainers/change sealed source/config/protocol or launchotherexperiments. Dashboardagent maypreparepresentationfixes, no restartuntilidle. OriginalfullZIPQAfinished, oneconfirmedsealedcheckpoint.json.tmp omission, all other exported-member checks passed; see exact docs/verification/study002-browser-export.md. Dashboardpatchwilladdressnewreleasewithoutchangingraw/freeze.
+
+Infraagentprepares31-cell timingrepair; noexecuteuntilscriptedstresscomplete. Frozenv2detachedworktree Phase2/GithubRepoFrozenTimingV2 sharesignoredruntime/ledger/env, originalvalidate_configpassed. About65–75minrealruntime whenauthorized.
+
 # Durable progress â€” 23 October 2026
+
+## Active extension checkpoint
+
+Precollection tag enforcement-extension-v1 at8579f111 pushed.36-unit real-LLM neutralpilot currently ACTIVE, command `.venv/Scripts/python.exe -m scripts.collect_enforcement neutral --output results/neutral-pilot-001`, tool session12303. Frozen extension source/protocol/config seal configs/enforcement-freeze.json. No active scripted collection yet. After pilot finishes run raw verification/validation/report; then390scripted stress via analogous `stress` command, separate results/enforcement-stress-002. Do not change sealed host/control/analysis/config/protocol files. Dashboard-only postcollection fixes may be prepared; no restart during runs. Originalfull ZIP QA may still be building; do not duplicate exports.
+
+SPIRE issuer recovered after original finished: expired node SVID caused agent exit08:20UTC; existing pinned bootstrap regenerated private join token and restarted only issuer, no core/image/tool reset. All11services healthy.17live positivecontrol cases/34HTTPrequests/19commits/15expecteddenials verify allsixpayloads legitexecutability andunchanged10records/100payment/multiplicity/approval/JIT. Shared ledger unchanged bycontrols. Evidence results/authorized-action-controls, docs/authorized-action-controls.md.
+
+Infra agent is preparing (NOT authorized to run yet) separate31cell outcome-independent timingrepair withfrozenv2worktree/sharedruntimeledger. No replacement data yet. Main source differs onlyhostpromptselection/metadata+newreport, actualcontrolsunchanged. Originaldata+auditscommitted/pusheded2989b7. Tests63passed beforeextensionseal.
 
 ## Current state and user-directed extension
 
