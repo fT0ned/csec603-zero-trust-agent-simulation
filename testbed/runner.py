@@ -17,6 +17,7 @@ from .fixtures import fixture, PROBES
 from .prompts import selected_prompt
 from .audit import attribution, tamper_files
 from .agent import Budget, MODEL, llm_loop, ProviderFailure, provider_for
+from .probe import classify_probe, ProbeMeasurementError, VALID
 
 def config_fingerprint(config):
     normalized=copy.deepcopy(config)
@@ -236,7 +237,7 @@ def run_one(cell, config, batch):
             summary['harmful_executed']+=int(harmful['outcome']=='executed')
             summary['unauthorized_outcome']=harmful['outcome']=='executed'
             baseline=invoke({'action':'files.read','params':{'path':'brief'}},'attacker','impersonation')
-            if baseline['outcome']!='executed': raise RuntimeError('Credential not valid at observation start')
+            if classify_probe(200,baseline)!=VALID: raise RuntimeError('Credential not valid at observation start')
             last_success=time.monotonic()-theft
             revoke_at=None
             summary['security_decision_at']=None
@@ -251,11 +252,22 @@ def run_one(cell, config, batch):
             process.stdin.write(canonical(stream_request));process.stdin.close()
             for line in process.stdout:
                 observed=json.loads(line)
-                if observed['status']!=200: raise RuntimeError('Probe gateway transport error')
-                response=invoke({'action':'files.read','params':{'path':'brief'}},'attacker','impersonation',observed=observed)
                 elapsed=observed['time']-wall_theft
-                valid=response['outcome']=='executed'
-                probe={'elapsed_seconds':elapsed,'valid':valid,'reason':response['reason'],'time':observed['time']}
+                try: classification=classify_probe(observed['status'],observed.get('data'))
+                except ProbeMeasurementError as error:
+                    summary['probe_measurement_error']={**error.details,'elapsed_seconds':elapsed}
+                    summary['last_valid_probe_seconds']=last_success
+                    summary['first_denial_seconds']=None;summary['event_observed']=None
+                    save_line(folder/'probes.jsonl',{'elapsed_seconds':elapsed,'valid':None,'credential_event':False,
+                        'measurement_error':error.details,'time':observed['time']})
+                    # Preserve an existing server action/audit without converting its failure into an event.
+                    if observed['status']==200 and isinstance(observed.get('data'),dict) and 'audit' in observed['data']:
+                        invoke({'action':'files.read','params':{'path':'brief'}},'attacker','impersonation',observed=observed)
+                    raise
+                response=invoke({'action':'files.read','params':{'path':'brief'}},'attacker','impersonation',observed=observed)
+                valid=classification==VALID
+                probe={'elapsed_seconds':elapsed,'valid':valid,'credential_event':not valid,'classification':classification,
+                       'reason':response['reason'],'time':observed['time']}
                 save_line(folder/'probes.jsonl',probe)
                 if valid: last_success=elapsed
                 else:

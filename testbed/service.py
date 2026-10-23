@@ -190,6 +190,10 @@ async def execute(run_id: str, request: Request):
         start = time.perf_counter(); now = time.time()
         allow = data.get('credential_valid', False) and not state['revoked'] and not state['suspended']
         reason = data.get('credential_reason', 'unauthenticated'); approval_count = 0; approval_ms = 0
+        # Validation and execution are separate requests. Report the current
+        # enforcing state if revocation landed between them; authority is unchanged.
+        if state['revoked']: reason = 'revoked'
+        elif state['suspended']: reason = 'suspended'
         policy_input = None; policy_result = None; policy_error=False;jit_evidence=None
         if allow and state['condition'].startswith('C2'):
             policy_input = {'condition':state['condition'],'action':data['action'],'params':data['params'],

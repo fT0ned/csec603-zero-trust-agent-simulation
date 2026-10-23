@@ -1,3 +1,9 @@
+# RUNNING: endpoint repair002, session97745
+
+Actualstart23October17:51:10UTC, pushed timing-endpoint-repair-v1/c31ef598. Preflightallpass/idle; twoactualrunfolders. Expectedlongestfinishabout18:55UTC. Currentcollectorimports unchanged GithubRepoFrozenTimingV2/run_one+deployedoriginalimage. DO NOTdeploy/rebuild/reset/otherexperiments/heavyexports whileactive. Currentmainprobe/client/runner/servicechangesareprospectiveonly: classifierrejectstool/transport/policyerrorsinsteadfalseexpiry;PAstale-revocationreasonlabelcorrectedwithoutpermissionchange.14focusedmocktests pass; originalfullsuite73passedbefore10newprobetests. Needfullsuite/postcollectionliveverificationlater.
+
+New results/timing-sensitivity-001/build_referenced_view.py preparedonly; gatedhashboundreview andprospective32cellplan; noacceptedview/datafabrication. Itselects1168original+30reviewed001+2new002; rejects selectedsemanticfailureIDs andchangedreviewbytes; frozenanalyzer/portableledger/rawverify/sidebysidependingaftercollection. Allsubagentscurrentlyquota-ended; rootownsremainingwork.
+
 # Active handoff — 23 October17:55UTC (actual next launch pending)
 
 User resumed after account quota interruption. Allsubagents ended onusagequota; rootcontinuing. timing-repair-001 COMPLETED31/31 at14:41UTC,879rawfilesverified,685clock samples/maxgap6.5s/no step, wrapperqualitypassed BUT independentsemanticveto remains. Final full read-only audit scripts/adjudicate_credential_endpoints.py: original810 reviewed1allowed ReadErrorfalseevent; repair31 reviewed1suchfalseevent. Original29 +repair2 stale-valid S4now denials are actual PAdenials underdeclaredrevocation, nottoolerrors; C2explicitrevoked/suspendedsignals, C0/C1frozenPAequation/trustedcontrolplaneinference disclosed.

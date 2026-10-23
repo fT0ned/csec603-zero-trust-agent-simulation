@@ -68,3 +68,6 @@ def test_jit_intent_multiplicity_and_duplicate_audit(tmp_path):
             assert repeated['outcome']=='denied' and 'intent mismatch' in repeated['reason']
             state['revoked']=True;body['request_id']='payment-1';revoked=send()
             assert revoked['outcome']=='denied' and state['audit_count']==4
+            # Input still says credential_reason=valid: PA revocation happened
+            # after authentication. The enforcing reason must describe the denial.
+            assert revoked['reason']=='revoked'

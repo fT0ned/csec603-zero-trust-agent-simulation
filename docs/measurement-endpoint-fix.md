@@ -1,0 +1,11 @@
+# Prospective credential-probe measurement correction
+
+This change applies to future current-source runs only. It is not deployed during the frozen timing-repair002 collection and does not change any preserved source snapshot, raw trace, reported original event or security policy.
+
+The frozen probe client stopped when the harmless file-read outcome was anything other than executed. The frozen runner called that stop a credential denial, even if the gateway had allowed the request and the downstream tool failed. ReadError examples in the original and first repair demonstrate the distinction. The separate semantic audit and quality veto preserve those observations without promoting them to expiry or silently changing their survival censoring.
+
+The shared testbed/probe.py classifier now recognizes valid executed probes and actual denied revoked/invalid-or-expired-JWT responses. HTTP errors, malformed or inconsistent responses, policy denials, tool failures and policy-engine failures become explicit measurement failures. The client emits the actual failure once and stops, with no implicit retry. The runner preserves available action/audit evidence, records the last valid probe and measurement-error category, leaves the expiry event unknown and marks the unit as infrastructure_failure. Tool effects remain separately evidenced.
+
+Authentication and execution are separate PA requests. Revocation may occur between them. The PA previously denied correctly but retained the earlier valid reason. The prospective service response now reports revoked or suspended from its current enforcing state. This corrects the label; the allow equation, policy, workflow/approval rules and effect path are unchanged. Frozen runtime keeps its original bytes and its reason-race reconstruction is explicitly disclosed.
+
+Fourteen focused offline tests exercise tool/transport/policy failures, malformed/inconsistent responses, real credential denials, the client's exactly-two-call stop without retry, and a PA revocation occurring after a still-valid authentication input. They passed before deployment. Actual deployment and live acceptance must be recorded separately after all research collection; mocked tests are not live experimental findings. Use the numbered runbook and a separately frozen protocol for new confirmatory research.
