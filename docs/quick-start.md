@@ -3,7 +3,7 @@
 ## Open it
 
 1. Start **Docker Desktop** and wait until it is ready.
-2. Open PowerShell in `Phase2/GithubRepoLive` and run:
+2. If the dashboard already opens, use it. Otherwise open `Phase2/GithubRepoLive` in File Explorer, type `powershell` in its address bar, press Enter, and run:
 
    ```powershell
    powershell -ExecutionPolicy Bypass -File scripts/launch.ps1
@@ -16,7 +16,7 @@ Your existing installation and credentials are already configured. On a new comp
 ## Try a quick, free comparison
 
 1. Choose **Engineering control checks**, then **Load preset**.
-2. Keep **Scripted**, **Engineering verification**, **C0, C1, C2**, and **S1, S2, S5**. Set **Trials per cell = 1** and **Concurrency = 1**.
+2. Keep **Scripted** and **Engineering verification**. Select **only C0, C1, C2** and **only S1, S2, S5**; untick the other conditions/scenarios. Set **Trials per cell = 1** and **Concurrency = 1**.
 3. Click **Start experiment**. Select the new entry in **Collection history** to follow it.
 4. Read **Compare conditions**, then select a trial and its action/policy/audit traces. Download **CSV**, **JSON**, or the **Reproducibility bundle**.
 5. **Reset console** clears your selection; it keeps the results. Use **Cancel collection** to stop a dashboard-started run, retaining partial evidence.
