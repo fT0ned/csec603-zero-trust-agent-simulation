@@ -11,6 +11,19 @@ spec=importlib.util.spec_from_file_location('sensitivity_builder',SCRIPT)
 builder=importlib.util.module_from_spec(spec);spec.loader.exec_module(builder)
 
 class SensitivityGateTests(unittest.TestCase):
+    def test_dispatcher_workers_use_preserved_code_not_config(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);folder=root/'results/cohort';folder.mkdir(parents=True)
+            source=folder/'collect_repair.py';source.write_text('pool = concurrent.futures.ThreadPoolExecutor(max_workers=31)\n')
+            (folder/'config.json').write_text('{"concurrency":32}')
+            with patch.object(builder,'MAIN',root):
+                row=builder.dispatcher_worker_evidence('cohort')
+                self.assertEqual(row['actual_dispatch_workers'],31)
+                self.assertEqual(row['configured_and_recorded_concurrency'],32)
+                self.assertEqual(row['evidence_sha256'],builder.sha(source))
+                source.write_text('pool = concurrent.futures.ThreadPoolExecutor(max_workers=unknown)\n')
+                with self.assertRaisesRegex(ValueError,'unique literal worker'):builder.dispatcher_worker_evidence('cohort')
+
     def test_deployed_crlf_git_lf_contract_and_real_change_rejection(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);original=root/'deployed.py';snapshot=root/'git.py'

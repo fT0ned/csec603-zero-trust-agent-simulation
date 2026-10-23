@@ -4,7 +4,7 @@ No default action. --build needs accepted repair-review.json bound to quality an
 protocol hashes. Raw bytes are never copied, modified or removed. --analyze is
 optional and invokes the unchanged analyzer from the frozen worktree.
 """
-import argparse,csv,hashlib,json,os,re,shutil,subprocess,sys,time
+import argparse,ast,csv,hashlib,json,os,re,shutil,subprocess,sys,time
 from datetime import datetime
 from pathlib import Path
 OUT=Path(__file__).resolve().parent
@@ -37,6 +37,18 @@ def verify_control_snapshot(original,snapshot,deployed_byte_sha256,tagged_snapsh
     if sha(snapshot)!=tagged_snapshot_byte_sha256:raise ValueError('Repair source bytes differ from tagged source manifest')
     if original.read_text(encoding='utf-8')!=snapshot.read_text(encoding='utf-8'):
         raise ValueError('Repair control source text differs beyond declared newline representation')
+
+def dispatcher_worker_evidence(cohort):
+    path=MAIN/'results'/cohort/'collect_repair.py'
+    values=[]
+    for node in ast.walk(ast.parse(path.read_text(encoding='utf-8'))):
+        if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute) and node.func.attr=='ThreadPoolExecutor':
+            values.extend(k.value.value for k in node.keywords if k.arg=='max_workers' and isinstance(k.value,ast.Constant)
+                          and isinstance(k.value.value,int) and not isinstance(k.value.value,bool))
+    if len(values)!=1 or values[0]<1:raise ValueError('Cannot establish unique literal worker count from preserved dispatcher')
+    return {'actual_dispatch_workers':values[0],'evidence_path':path.relative_to(MAIN).as_posix(),
+            'evidence_sha256':sha(path),'configured_and_recorded_concurrency':read(path.parent/'config.json').get('concurrency'),
+            'interpretation':'Actual dispatcher concurrency; raw config/summary metadata concurrency is preserved and may differ.'}
 
 def verify_predata():
     commit=subprocess.check_output(['git','rev-parse',PROSPECTIVE_TAG+'^{}'],cwd=MAIN,text=True).strip()
@@ -187,7 +199,7 @@ def prepare_review():
         'selected_replacement_units':selected,'selected_raw_verification_sha256':sha(OUT/'selected-raw-review.json'),
         'comparability':{'initial_actual_prompt_task_tools_sampling_and_alias_equal':True,
             'preserved_config_equal_and_predeclared_control_byte_text_contract_passed':True,'fingerprints':fingerprints,
-            'actual_workers_by_cohort':{name:read(MAIN/'results'/name/'repair-protocol.json').get('actual_workers') for name in ['timing-repair-001','timing-repair-002']},
+            'actual_workers_by_cohort':{name:dispatcher_worker_evidence(name) for name in ['timing-repair-001','timing-repair-002']},
             'model_limit':'Same mutable alias/documented version does not prove identical model weights; fingerprint agreement is not an immutable model guarantee.'},
         'claim_boundary':'Pending independent lead review. Original/repair001 vetoes retained; conditional sensitivity only. Metadata copying erratum, later collection, actual worker count, alias/fingerprint drift and sampled clocks must remain disclosed.'})
     print(json.dumps({'prepared_review_only':True,'status':'pending','accepted':False,'view_created':False}))
