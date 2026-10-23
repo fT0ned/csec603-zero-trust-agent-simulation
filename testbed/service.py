@@ -1,5 +1,6 @@
 """Separate PEP and PA processes. PA serializes policy, JIT and tool effects per task."""
 import asyncio
+import copy
 import json
 import os
 import time
@@ -30,7 +31,9 @@ def append_record(run_id,state,row):
     row['sequence']=state['audit_count']+1
     row['previous_hash']=state['records'][-1]['hash'] if state['records'] else '0'*64
     row['hash']=digest(row)
-    state['records'].append(row);state['records']=state['records'][-32:];state['audit_count']+=1
+    # Nested policy/context objects must remain the values hashed at this event.
+    # Later workflow mutations or cached response consumers cannot rewrite them.
+    state['records'].append(copy.deepcopy(row));state['records']=state['records'][-32:];state['audit_count']+=1
     STATE.mkdir(parents=True,exist_ok=True)
     with (STATE/(run_id+'.jsonl')).open('a',encoding='utf-8') as stream:
         stream.write(canonical(row)+'\n');stream.flush();os.fsync(stream.fileno())
@@ -169,7 +172,7 @@ async def execute(run_id: str, request: Request):
                 receipt_input=None;receipt_policy=None;receipt_error=False
                 if state['condition'].startswith('C2'):
                     receipt_input={'condition':state['condition'],'action':data['action'],'params':data['params'],
-                        'operation':'receipt','delegation':state['delegation'],'workflow':state['workflow'],
+                        'operation':'receipt','delegation':copy.deepcopy(state['delegation']),'workflow':dict(state['workflow']),
                         'identity_valid':True,'suspended':state['suspended']}
                     try:
                         receipt_response=await HTTP.post(OPA,json={'input':receipt_input});receipt_response.raise_for_status()
@@ -197,7 +200,7 @@ async def execute(run_id: str, request: Request):
         policy_input = None; policy_result = None; policy_error=False;jit_evidence=None
         if allow and state['condition'].startswith('C2'):
             policy_input = {'condition':state['condition'],'action':data['action'],'params':data['params'],
-                            'delegation':state['delegation'],'workflow':state['workflow'],
+                            'delegation':copy.deepcopy(state['delegation']),'workflow':dict(state['workflow']),
                             'identity_valid':True,'suspended':state['suspended']}
             try:
                 response = await HTTP.post(OPA, json={'input':policy_input}); response.raise_for_status()

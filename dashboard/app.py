@@ -413,6 +413,16 @@ class JobManager:
                       "ttl_seconds", "revocation_mode", "unauthorized_outcome", "harmful_attempts",
                       "harmful_executed", "attribution_true", "attribution_predicted")
             item = {key: raw[key] for key in fields if key in raw and isinstance(raw[key], (str, int, float, bool, type(None)))}
+            # The separate authorization study counts independently committed
+            # effects, not injection following. Project its counters for the
+            # existing comparison view without altering preserved summaries.
+            if raw.get("study_kind") == "objective-driven-authorization":
+                item["harmful_attempts"] = raw.get("unauthorized_attempts")
+                item["harmful_executed"] = raw.get("unauthorized_committed")
+                for key in ("unauthorized_attempts", "unauthorized_denied", "unauthorized_allowed",
+                            "unauthorized_committed", "committed_records", "committed_payment",
+                            "principal_task_completed", "false_denials", "evidence_valid"):
+                    item[key] = raw.get(key)
             metadata = raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {}
             for key in ("model", "model_snapshot", "approval_dependent", "system_prompt_profile", "protocol_id", "study_kind"):
                 value = raw.get(key, metadata.get(key))

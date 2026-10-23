@@ -14,17 +14,30 @@ recipient_ok := false if {
 default vendor_ok := true
 vendor_ok := false if {
     input.action == "payments.pay"
-    input.params.vendor != "vendor-1"
+    not input.params.vendor in object.get(input.delegation, "vendors", [])
+}
+
+export_bound_ok if {
+    bound := input.delegation.max_per_records
+    is_number(bound)
+    bound >= 0
+    input.params.limit <= bound
+}
+payment_bound_ok if {
+    bound := input.delegation.max_per_payment
+    is_number(bound)
+    bound >= 0
+    input.params.amount <= bound
 }
 
 default per_action_ok := true
 per_action_ok := false if {
     input.action == "crm.export"
-    input.params.limit > 5
+    not export_bound_ok
 }
 per_action_ok := false if {
     input.action == "payments.pay"
-    input.params.amount > 50
+    not payment_bound_ok
 }
 
 default workflow_ok := true
