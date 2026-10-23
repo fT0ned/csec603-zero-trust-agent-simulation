@@ -45,3 +45,26 @@ def test_decoded_gzip_secret_is_detected_without_value_in_report(tmp_path):
     result=bundle(tmp_path,secret=True)
     assert not result['integrity_passed'] and result['secret_member_paths']
     assert 'synthetic-secret-123456' not in json.dumps(result)
+
+
+def test_unlisted_members_and_intentional_metadata_are_also_secret_scanned(tmp_path):
+    bundle(tmp_path)
+    path=tmp_path/'bundle.zip'
+    with zipfile.ZipFile(path,'a') as archive:
+        archive.writestr('unexpected-unlisted.txt',b'synthetic-secret-123456')
+        archive.writestr('BUNDLE_README.txt',b'synthetic-secret-123456')
+    result=verify(path,[b'synthetic-secret-123456'])
+    assert not result['integrity_passed']
+    assert any('absent from export checksum manifest' in error for error in result['errors'])
+    assert result['secret_member_paths']==['BUNDLE_README.txt','results/runs/r1/actions.jsonl.gz','unexpected-unlisted.txt']
+    assert 'synthetic-secret-123456' not in json.dumps(result)
+
+
+def test_secret_in_unlisted_member_name_is_not_echoed_in_diagnostics(tmp_path):
+    bundle(tmp_path)
+    path=tmp_path/'bundle.zip'
+    with zipfile.ZipFile(path,'a') as archive:
+        archive.writestr('synthetic-secret-123456.txt',b'ordinary content')
+    result=verify(path,[b'synthetic-secret-123456'])
+    assert not result['integrity_passed']
+    assert 'synthetic-secret-123456' not in json.dumps(result)

@@ -32,15 +32,20 @@ def verify(path, secrets=()):
         if len(names)!=len(members):errors.append('Duplicate ZIP member names')
         if any(not safe(name) for name in names):raise ValueError('Unsafe ZIP member path')
         sums=json.loads(archive.read('SHA256SUMS.json'))
-        for name,expected in sums.items():
-            if name not in members:errors.append('Checksum member missing: '+name);continue
+        for name in names:
+            if any(secret in name.encode('utf-8') for secret in secrets):secret_members.add(name)
+            if archive.getinfo(name).is_dir():continue
+            if name not in sums and name not in {'SHA256SUMS.json','BUNDLE_README.txt'}:
+                errors.append('ZIP member absent from export checksum manifest: '+name)
             with archive.open(name) as stream:hashes[name]=scan(stream,name)
-            if hashes[name]!=expected:errors.append('Export checksum mismatch: '+name)
             if name.endswith('.jsonl.gz') and secrets:
                 with archive.open(name) as compressed, gzip.GzipFile(fileobj=compressed) as decoded:scan(decoded,name)
+        for name,expected in sums.items():
+            if name not in members:errors.append('Checksum member missing: '+name)
+            elif hashes.get(name)!=expected:errors.append('Export checksum mismatch: '+name)
         def check(name, expected, kind):
             if name not in members:errors.append(kind+' missing: '+name)
-            elif name not in hashes:errors.append(kind+' absent from export checksum manifest: '+name)
+            elif name not in sums:errors.append(kind+' absent from export checksum manifest: '+name)
             elif hashes[name]!=expected:errors.append(kind+' original hash mismatch: '+name)
         for name in names:
             if name.startswith('results/runs/') and name.endswith('/raw-manifest.json'):
@@ -57,11 +62,23 @@ def verify(path, secrets=()):
                 sources+=1;check('source/'+relative.replace('\\','/'),expected,'Collection source')
         if secret_members:errors.append('Known local secret found in exported member bytes')
         provenance=json.loads(archive.read('EXPORT_PROVENANCE.json')) if 'EXPORT_PROVENANCE.json' in members else None
-    return {'integrity_passed':not errors,'errors':errors,'export_checksums_checked':len(sums),
+    result={'integrity_passed':not errors,'errors':errors,'export_checksums_checked':len(sums),'all_file_members_hashed_and_scanned':len(hashes),
         'original_raw_members_checked':sealed,'source_files_checked':sources,'figure_table_exports_checked':figures,
         'known_local_secrets_checked':len(secrets),'secret_member_paths':sorted(secret_members),
         'batch_quality':provenance.get('batch_quality') if provenance else None,
         'scientific_acceptance_inferred':False,'archive':str(Path(path).resolve())}
+    # Even an adversarial member name or embedded quality record must not echo a
+    # known private value into diagnostics. Source bytes are never changed.
+    def scrub(value):
+        if isinstance(value,str):
+            for secret in secrets:
+                text=secret.decode('utf-8',errors='ignore')
+                if text:value=value.replace(text,'[REDACTED]')
+            return value
+        if isinstance(value,list):return [scrub(item) for item in value]
+        if isinstance(value,dict):return {scrub(key):scrub(item) for key,item in value.items()}
+        return value
+    return scrub(result)
 
 
 def main():
