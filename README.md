@@ -2,7 +2,7 @@
 
 Group Leopard's CSEC 603 Track B testbed compares static keys, real SPIRE workload identity and a combined OPA/delegation/workflow/approval/audit treatment. It includes separate agent and stolen-credential clients, private mock enterprise tools, real LLM tool calling, a local dashboard and reproducible analysis.
 
-The parent enterprisePhase2_FINAL.docx governs the design; official requirements and professor feedback take precedence. Read [the research brief](docs/research-brief.md), [method and limitations](docs/method.md), and [numbered runbook](docs/runbook.md). Current status is in [durable progress notes](docs/progress.md).
+The parent enterprisePhase2_FINAL.docx governs the design; official requirements and professor feedback take precedence. Start with the [plain-English experiment guide](docs/quick-start.md) or [handoff](docs/handoff.md). Detailed references: [research brief](docs/research-brief.md), [method and limitations](docs/method.md), and [numbered runbook](docs/runbook.md). Current status is in [durable progress notes](docs/progress.md).
 
 1. Start Docker Desktop, then run `powershell -ExecutionPolicy Bypass -File scripts/setup.ps1`.
 2. Configure the ignored `.env` from `.env.example` for paid runs and preserve the spending ledger.

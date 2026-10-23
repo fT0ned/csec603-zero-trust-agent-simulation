@@ -167,6 +167,10 @@ print(json.dumps(result))
         evidence['spend_ledger_unchanged']=ledger_before==(hashlib.sha256(ledger.read_bytes()).hexdigest() if ledger.exists() else None)
         evidence['passed']=evidence['passed'] and evidence['spend_ledger_unchanged']
         write_json(batch/'verification.json',evidence)
+        write_json(batch/'batch-status.json',{'planned':1,'original_failures':1,'reruns':0,
+          'remaining_failures':1,'completed_at':time.time(),'intentional_negative_control':True,
+          'verification_passed':evidence['passed'],'provider_calls':0,
+          'reason':'Controlled engineering tool failure; expected infrastructure_failure retained, not research data'})
     print(json.dumps({'output':str(batch),'passed':evidence['passed'],'provider_calls':0,'expected_unit_status':'infrastructure_failure'}))
     return 0 if evidence['passed'] else 1
 
