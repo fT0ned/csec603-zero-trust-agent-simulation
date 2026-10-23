@@ -259,7 +259,9 @@ def run_one(cell, config, batch):
                     summary['last_valid_probe_seconds']=last_success
                     summary['first_denial_seconds']=None;summary['event_observed']=None
                     save_line(folder/'probes.jsonl',{'elapsed_seconds':elapsed,'valid':None,'credential_event':False,
-                        'measurement_error':error.details,'time':observed['time']})
+                        'measurement_error':error.details,'time':observed['time'],
+                        'client_probe_classification':observed.get('probe_classification'),
+                        'client_probe_measurement_error':observed.get('probe_measurement_error')})
                     # Preserve an existing server action/audit without converting its failure into an event.
                     if observed['status']==200 and isinstance(observed.get('data'),dict) and 'audit' in observed['data']:
                         invoke({'action':'files.read','params':{'path':'brief'}},'attacker','impersonation',observed=observed)
