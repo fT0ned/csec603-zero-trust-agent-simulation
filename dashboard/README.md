@@ -31,3 +31,17 @@ The host dashboard caches compact UI projections by each summary's nanosecond mo
 This is a host UI/monitoring-only change after the collection freeze. It does not modify collection code, frozen design, collected source snapshots, raw observations, or analysis. A reproducibility export continues to prioritize its collection-time source; export-time support files may reflect this newer dashboard revision.
 
 External CLI batches whose completion marker records `interrupted: true` display **interrupted** with the preserved operator reason. Unfinished trial summaries remain unchanged; they are not relabelled as completed or counted as infrastructure failures by the dashboard.
+
+
+## Post-collection release after study-002
+
+The original study-002 dashboard export QA is preserved in `docs/verification/study002-browser-export.md` and its companion JSON/screenshots. Its 17,333 sealed raw members included one `checkpoint.json.tmp` omitted by the original suffix filter. The subsequent host dashboard permits only that exact filename under a run directory when it is a bounded JSON object and its SHA-256 matches the exact member listed in that run's raw manifest. Arbitrary/unsealed/changed temporary files remain rejected; exported checkpoint JSON is credential-redacted while raw bytes remain unchanged.
+
+Collection completion and data quality are displayed separately. A failed immutable `validation.json` produces a prominent warning; completion counts describe distinct completed units, with retained failed attempts labelled separately. All attempts remain available in traces and full CSV/JSON exports. Historical study-002 remains quality-failed; this presentation correction does not validate or repair its timing observations.
+
+The configuration form accepts `system_prompt_profile` (`original-v1` or `neutral-v1`), optional `protocol_id`, and optional `study_kind`. Repository presets include the exploratory neutral-prompt pilot and deterministic enforcement stress. Selected-batch provenance identifies the profile/protocol/study kind; historical batches without these fields explicitly show their legacy defaults. These are separate protocols and must not be pooled. Frozen original experiments must be reproduced with their preserved configuration and source; an edited configuration requires its own applicable pre-run freeze.
+
+These host-only corrections were made after original collection. The original tags, collected source snapshots, configuration, raw evidence, and failed validation remain preserved. Restart this dashboard revision only at an idle collection boundary; a running server continues its loaded backend until restart.
+
+
+Gzip export preserves exact original compressed bytes when a bounded scan of every JSONL record finds no required redaction. If redaction is necessary, the archive sanitizes/recompresses that trace and lists the original/exported hashes in `EXPORT_PROVENANCE.json`. Original raw manifests remain preserved; altered sealed members cannot pass those original seals. The provenance also lists missing sealed members and never claims the exporter performed raw verification. Extract an unchanged bundle and run the preserved analysis CLI's `--verify-raw` check before claiming reproducibility. The original study-002 archive predates this correction and recompressed clean gzip streams; its exported SHA-256 checksums passed, but those bytes cannot satisfy the original gzip seals.

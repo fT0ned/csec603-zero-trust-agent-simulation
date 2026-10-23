@@ -57,6 +57,9 @@ class ExperimentConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     mode: Literal["scripted", "llm"] = "scripted"
     phase: Literal["engineering", "pilot", "full"] = "engineering"
+    system_prompt_profile: Literal["original-v1", "neutral-v1"] = "original-v1"
+    protocol_id: str | None = Field(default=None, max_length=100, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
+    study_kind: str | None = Field(default=None, max_length=100, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
     conditions: list[Literal["C0", "C1", "C2", "C2-noWF", "C2-RS"]] = ["C0", "C1", "C2"]
     scenarios: list[Literal["S1", "S2", "S3", "S4", "S5"]] = ["S1", "S2", "S5"]
     repeats: int = Field(default=1, ge=1, le=300)
@@ -112,11 +115,27 @@ def redact(value, secret_values=None):
     return value
 
 
+def sealed_checkpoint(root: Path, candidate: Path) -> bool:
+    """Permit only the known JSON checkpoint sealed in this run's raw manifest."""
+    parts = candidate.relative_to(root.resolve()).parts
+    if len(parts) != 3 or parts[0] != "runs" or parts[2] != "checkpoint.json.tmp" or not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", parts[1]):
+        return False
+    try:
+        manifest = (candidate.parent / "raw-manifest.json").resolve()
+        if not manifest.is_relative_to(root.resolve()) or candidate.stat().st_size > 1024 * 1024 or manifest.stat().st_size > 1024 * 1024:
+            return False
+        expected = json.loads(manifest.read_text(encoding="utf-8"))["files"].get(candidate.name)
+        content = candidate.read_bytes()
+        return isinstance(expected, str) and hashlib.sha256(content).hexdigest() == expected and isinstance(json.loads(content), dict)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return False
+
+
 def safe_file(root: Path, relative: str) -> Path:
     candidate = (root / relative).resolve()
     if not candidate.is_relative_to(root.resolve()) or not candidate.is_file():
         raise HTTPException(404, "File not found")
-    if (candidate.suffix not in ALLOWED_SUFFIXES and candidate.name != "Dockerfile") or any(x.startswith(".") for x in candidate.relative_to(root.resolve()).parts):
+    if (candidate.suffix not in ALLOWED_SUFFIXES and candidate.name != "Dockerfile" and not sealed_checkpoint(root, candidate)) or any(x.startswith(".") for x in candidate.relative_to(root.resolve()).parts):
         raise HTTPException(404, "File not exportable")
     if candidate.suffix == ".gz" and not candidate.name.endswith(".jsonl.gz"):
         raise HTTPException(404, "Only compressed JSONL evidence is exportable")
@@ -128,8 +147,8 @@ def sanitized_bytes(path: Path) -> bytes:
         return path.read_bytes()
     content = path.read_bytes().decode("utf-8", errors="replace")
     try:
-        if path.suffix == ".json":
-            original = json.loads(content)
+        if path.suffix == ".json" or path.name == "checkpoint.json.tmp":
+            original = json.loads(content.lstrip("\ufeff"))
             sanitized = redact(original)
             if sanitized == original:
                 return content.encode("utf-8")
@@ -152,16 +171,18 @@ def redact_large_text(content, suffix):
     return content
 
 
-def sanitized_chunks(path: Path):
+def sanitized_chunks(path: Path, secret_values=None):
     """Bound export memory; structured traces rotate at 1 MB in the harness."""
     chunk_size = 1024 * 1024
+    if secret_values is None:
+        secret_values = tuple(secret for key, secret in os.environ.items() if SECRET_ENV_PATTERN.search(key) and len(secret) >= 12)
     if path.name.endswith(".jsonl.gz"):
         with gzip.open(path, "rb") as stream:
             while line := stream.readline(chunk_size + 1):
                 if len(line) > chunk_size:
                     raise ValueError("Compressed evidence record exceeds the 1 MB export limit")
                 if line.strip():
-                    yield (json.dumps(redact(json.loads(line)), ensure_ascii=False) + "\n").encode("utf-8")
+                    yield (json.dumps(redact(json.loads(line), secret_values), ensure_ascii=False) + "\n").encode("utf-8")
         return
     if path.stat().st_size <= chunk_size:
         yield sanitized_bytes(path)
@@ -192,10 +213,35 @@ def sanitized_chunks(path: Path):
         yield redact_large_text(pending, path.suffix).encode("utf-8")
 
 
+def gzip_needs_redaction(path: Path, secret_values) -> bool:
+    """Inspect every decoded record with bounded memory before copying raw gzip."""
+    changed = False
+    with gzip.open(path, "rb") as stream:
+        while line := stream.readline(1024 * 1024 + 1):
+            if len(line) > 1024 * 1024:
+                raise ValueError("Compressed evidence record exceeds the 1 MB export limit")
+            if line.strip():
+                original = json.loads(line)
+                if redact(original, secret_values) != original:
+                    changed = True
+    return changed
+
+
 def zip_sanitized(archive, path: Path, name: str):
     checksum = hashlib.sha256()
+    with path.open("rb") as raw:
+        raw_checksum = hashlib.file_digest(raw, "sha256").hexdigest()
+    secret_values = tuple(secret for key, secret in os.environ.items() if SECRET_ENV_PATTERN.search(key) and len(secret) >= 12)
+    compressed_trace = path.name.endswith(".jsonl.gz")
+    changed = gzip_needs_redaction(path, secret_values) if compressed_trace else False
     with archive.open(name, "w", force_zip64=True) as member:
-        if path.name.endswith(".jsonl.gz"):
+        if compressed_trace and not changed:
+            # gzip headers, compression settings, whitespace, and raw seals survive.
+            with path.open("rb") as raw:
+                while content := raw.read(1024 * 1024):
+                    member.write(content)
+                    checksum.update(content)
+        elif compressed_trace:
             class HashingWriter:
                 def write(self, content):
                     checksum.update(content)
@@ -205,13 +251,13 @@ def zip_sanitized(archive, path: Path, name: str):
                     pass
 
             with gzip.GzipFile(fileobj=HashingWriter(), mode="wb", filename="", mtime=0) as compressed:
-                for content in sanitized_chunks(path):
+                for content in sanitized_chunks(path, secret_values):
                     compressed.write(content)
         else:
-            for content in sanitized_chunks(path):
+            for content in sanitized_chunks(path, secret_values):
                 member.write(content)
                 checksum.update(content)
-    return checksum.hexdigest()
+    return checksum.hexdigest(), raw_checksum
 
 
 class JobManager:
@@ -319,12 +365,12 @@ class JobManager:
             raw = json.loads(resolved.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
                 raise ValueError("Summary must be an object")
-            fields = ("run_id", "condition", "scenario", "status", "mode", "phase", "collection_id",
+            fields = ("run_id", "condition", "scenario", "status", "mode", "phase", "collection_id", "seed", "pair_id",
                       "ttl_seconds", "revocation_mode", "unauthorized_outcome", "harmful_attempts",
                       "harmful_executed", "attribution_true", "attribution_predicted")
             item = {key: raw[key] for key in fields if key in raw and isinstance(raw[key], (str, int, float, bool, type(None)))}
             metadata = raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {}
-            for key in ("model", "model_snapshot", "approval_dependent"):
+            for key in ("model", "model_snapshot", "approval_dependent", "system_prompt_profile", "protocol_id", "study_kind"):
                 value = raw.get(key, metadata.get(key))
                 if isinstance(value, (str, int, float, bool, type(None))):
                     item[key] = value
@@ -355,7 +401,26 @@ class JobManager:
     def snapshot(self, job):
         result = dict(job)
         root = self.root / job["id"]
-        result["completed_runs"] = sum(item.get("status") != "running" for item in self.compact_runs(job["id"]))
+        rows = self.compact_runs(job["id"])
+        completed = [item for item in rows if item.get("status") in (None, "completed")]
+        def unit_key(item):
+            if item.get("pair_id"):
+                return (item.get("condition"), item["pair_id"])
+            if item.get("seed") is not None:
+                return tuple(item.get(key) for key in ("condition", "scenario", "ttl_seconds", "revocation_mode", "seed"))
+            return (item["run_id"],)
+        result["completed_runs"] = len({unit_key(item) for item in completed})
+        result["retained_failed_runs"] = sum(item.get("status") not in (None, "completed", "running", "pending", "queued") for item in rows)
+        result["recorded_attempts"] = len(rows)
+        validation_path = root / "validation.json"
+        result["quality"] = {"status": "not_validated", "errors": []}
+        if validation_path.is_file():
+            try:
+                validation = json.loads(validation_path.read_text(encoding="utf-8"))
+                passed = validation.get("passed")
+                result["quality"] = {"status": "passed" if passed is True else "failed" if passed is False else "unknown", "errors": validation.get("errors", [])}
+            except (OSError, ValueError, AttributeError):
+                result["quality"] = {"status": "unreadable", "errors": ["Inspect preserved validation.json"]}
         result["evidence_label"] = {"llm": "REAL LLM", "scripted": "SCRIPTED CONTROL CHECK"}.get(job["config"].get("mode"), "MODE NOT RECORDED")
         status_file = root / "progress.json"
         if status_file.exists():
@@ -532,7 +597,7 @@ def create_app(results_root: Path | None = None, repo: Path = REPO):
 
     @app.get("/api/configs/{name}")
     def configuration(name: str):
-        if name not in {"engineering", "pilot", "study"}:
+        if name not in {"engineering", "pilot", "study", "neutral-pilot", "enforcement-stress"}:
             raise HTTPException(404, "Unknown configuration preset")
         path = repo / "configs" / (name + ".json")
         try:
@@ -554,7 +619,7 @@ def create_app(results_root: Path | None = None, repo: Path = REPO):
                 raise HTTPException(409, "No approved pre-run freeze. Complete and validate the pilot first.")
             if freeze.get("status") != "approved":
                 raise HTTPException(409, "Pre-run freeze is not approved")
-        return manager.start(config.model_dump())
+        return manager.start(config.model_dump(exclude_none=True))
 
     @app.get("/api/jobs/{job_id}")
     def job(job_id: str):
@@ -672,6 +737,13 @@ def create_app(results_root: Path | None = None, repo: Path = REPO):
         with tempfile.NamedTemporaryFile(prefix=job_id + "-", suffix=".zip", dir=export_dir, delete=False) as temporary:
             archive_path = Path(temporary.name)
         manifest = {}
+        altered = {}
+        def add_file(archive, file, name):
+            exported_hash, raw_hash = zip_sanitized(archive, file, name)
+            manifest[name] = exported_hash
+            if exported_hash != raw_hash:
+                altered[name] = {"original_sha256": raw_hash, "exported_sha256": exported_hash,
+                                 "reason": "Credential sanitization or text normalization changed exported bytes"}
         collected_source = (root / "source").is_dir()
         source_files = set()
         try:
@@ -683,7 +755,7 @@ def create_app(results_root: Path | None = None, repo: Path = REPO):
                         source_files.add(entry["path"][len("source/"):])
                     else:
                         name = "results/" + entry["path"]
-                    manifest[name] = zip_sanitized(archive, file, name)
+                    add_file(archive, file, name)
                 # A collected source snapshot takes precedence. Add only missing
                 # instructions/support files under an explicit export-time label.
                 prefix = "export-time-extras/" if collected_source else "source/"
@@ -699,15 +771,29 @@ def create_app(results_root: Path | None = None, repo: Path = REPO):
                         except HTTPException:
                             continue
                         name = prefix + relative
-                        manifest[name] = zip_sanitized(archive, file, name)
+                        add_file(archive, file, name)
                 for filename in ("README.md", "requirements.txt", "requirements.lock", "requirements.lock.txt", "pyproject.toml", "compose.yaml", "docker-compose.yml", "Dockerfile", ".dockerignore", ".gitignore", ".env.example"):
                     file = repo / filename
                     if file.is_file() and filename not in source_files:
                         name = prefix + filename
-                        manifest[name] = zip_sanitized(archive, file, name)
+                        add_file(archive, file, name)
+                sealed = set()
+                for seal in (root / "runs").glob("*/raw-manifest.json"):
+                    for relative in json.loads(seal.read_text(encoding="utf-8"))["files"]:
+                        sealed.add("results/" + (seal.parent / relative).relative_to(root).as_posix())
+                altered_sealed = sorted(sealed.intersection(altered))
+                provenance = {"schema": "dashboard-export-provenance-v1", "altered_files": altered,
+                              "altered_sealed_members": altered_sealed,
+                              "original_raw_manifests_preserved": not any(name.endswith("/raw-manifest.json") for name in altered),
+                              "missing_sealed_members": sorted(sealed.difference(manifest)),
+                              "raw_seal_validation": "NOT PERFORMED by exporter. Run analysis.cli --verify-raw on extracted results.",
+                              "warning": "Original raw seals CANNOT validate altered exported members; sanitized data must not be claimed byte-identical raw evidence." if altered_sealed else "No sealed raw member required changed bytes. Independently verify raw seals after extraction."}
+                provenance_bytes = json.dumps(provenance, indent=2).encode("utf-8")
+                archive.writestr("EXPORT_PROVENANCE.json", provenance_bytes)
+                manifest["EXPORT_PROVENANCE.json"] = hashlib.sha256(provenance_bytes).hexdigest()
                 archive.writestr("SHA256SUMS.json", json.dumps(manifest, indent=2))
                 source_note = "source/ contains the collection-time source snapshot; export-time-extras/ contains additional support files captured at export." if collected_source else "This legacy batch has no collection-time source snapshot. source/ was captured at export; use collection commit/freeze metadata to recover the original code."
-                archive.writestr("BUNDLE_README.txt", "Sanitized reproducibility bundle. Raw sources remain unchanged locally. SHA256SUMS.json covers exported bytes, which may differ from raw hashes where secrets were redacted. " + source_note + " Partial/cancelled evidence is retained and must not be treated as completed findings.\n")
+                archive.writestr("BUNDLE_README.txt", "Sanitized reproducibility bundle. Raw sources remain unchanged locally. SHA256SUMS.json covers exported bytes. Clean gzip traces preserve their original compressed bytes after bounded inspection of every decoded record. EXPORT_PROVENANCE.json lists every changed file with original/exported hashes. Original raw manifests are retained: any altered sealed member will fail original raw-seal verification and must not be claimed raw-valid. The exporter does not certify raw validity. " + source_note + " Partial/cancelled evidence is retained and must not be treated as completed findings.\n")
             return FileResponse(archive_path, media_type="application/zip", filename=f"{job_id}-reproducibility.zip", background=BackgroundTask(archive_path.unlink, missing_ok=True))
         except Exception:
             archive_path.unlink(missing_ok=True)

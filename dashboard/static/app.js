@@ -3,6 +3,7 @@ let selected = null;
 let lastRunCount = -1;
 let lastJobStatus = null;
 let lastJobMessage = null;
+let lastQualityStatus = null;
 let jobs = [];
 let refreshing = false;
 const $ = (id) => document.getElementById(id);
@@ -46,7 +47,8 @@ async function refreshJobs() {
       $("jobs").replaceChildren(...jobs.map(job => {
         const item = node("button", undefined, "job" + (job.id === selected ? " selected" : "")); item.type = "button";
         const header = node("div", undefined, "job-header"); header.append(node("span", job.id, "job-id"), statusBadge(job.status));
-        item.append(header, node("div", job.evidence_label + " · " + job.config.phase.toUpperCase(), "job-mode"), node("div", job.config.conditions.join(" / ") + " · " + job.config.scenarios.join(" / "), "job-meta"), node("div", job.completed_runs + (job.progress?.total ? " / " + job.progress.total : "") + " finished trials · " + job.message, "job-meta"));
+        item.append(header, node("div", job.evidence_label + " · " + job.config.phase.toUpperCase(), "job-mode"), node("div", job.config.conditions.join(" / ") + " · " + job.config.scenarios.join(" / "), "job-meta"), node("div", job.completed_runs + (job.progress?.total ? " / " + job.progress.total : "") + " completed units · " + (job.retained_failed_runs ? job.retained_failed_runs + " retained failed attempt(s) · " : "") + job.message, "job-meta"));
+        if (job.quality?.status === "failed") item.append(node("div", "QUALITY VALIDATION FAILED · inspect preserved validation.json", "job-meta"));
         const progress = node("progress", undefined, "progress-line"); progress.max = job.progress?.total || Math.max(1, job.completed_runs); if (job.progress || !isActive(job)) progress.value = job.progress?.completed ?? job.completed_runs; progress.setAttribute("aria-label", "Trial collection progress"); item.append(progress);
         item.addEventListener("click", () => selectJob(job.id)); return item;
       }));
@@ -55,8 +57,13 @@ async function refreshJobs() {
     if (current) {
       $("cancel-button").hidden = !isActive(current) || current.external;
       $("bundle-export").hidden = isActive(current);
-      $("selected-label").textContent = current.id + " · " + current.status + " · " + current.completed_runs + " recorded trials";
-      if (lastRunCount !== current.completed_runs || lastJobStatus !== current.status || lastJobMessage !== current.message) { lastRunCount = current.completed_runs; lastJobStatus = current.status; lastJobMessage = current.message; await loadEvidence(); }
+      $("selected-label").textContent = current.id + " · " + current.status + " collection · " + current.completed_runs + " completed units · " + (current.retained_failed_runs || 0) + " retained failed attempts";
+      const quality = current.quality?.status;
+      $("quality-warning").hidden = !["failed", "unreadable", "unknown"].includes(quality);
+      $("quality-warning").textContent = quality === "failed" ? "Quality validation FAILED. Collection completion does not establish valid findings. Inspect preserved validation.json: " + (current.quality.errors || []).join("; ") : "Quality validation is unavailable or incomplete. Inspect preserved validation.json.";
+      const config = current.config;
+      $("collection-provenance").textContent = `Prompt: ${config.mode === "scripted" ? "not used (scripted)" : config.system_prompt_profile || "original-v1 (legacy default)"} · Protocol: ${config.protocol_id || "original (legacy default)"} · Study kind: ${config.study_kind || config.phase}`;
+      if (lastRunCount !== current.completed_runs || lastJobStatus !== current.status || lastJobMessage !== current.message || lastQualityStatus !== current.quality?.status) { lastRunCount = current.completed_runs; lastJobStatus = current.status; lastJobMessage = current.message; lastQualityStatus = current.quality?.status; await loadEvidence(); }
       if (isActive(current) && $("trace-file").value === "runner.log") await loadTrace();
     }
   } catch (error) { notify("Could not refresh collection history: " + error.message, true); }
@@ -64,7 +71,7 @@ async function refreshJobs() {
 }
 
 async function selectJob(id) {
-  selected = id; lastRunCount = -1; lastJobStatus = null; lastJobMessage = null;
+  selected = id; lastRunCount = -1; lastJobStatus = null; lastJobMessage = null; lastQualityStatus = null;
   const job = jobs.find(j => j.id === id);
   $("evidence-actions").hidden = false;
   $("evidence-mode").textContent = job?.evidence_label || "COLLECTION BATCH";
@@ -144,6 +151,7 @@ $("run-form").addEventListener("submit", async event => {
   event.preventDefault();
   const form = new FormData(event.target);
   const config = Object.fromEntries(form.entries());
+  for (const field of ["protocol_id", "study_kind"]) if (!config[field]) delete config[field];
   config.conditions = form.getAll("conditions"); config.scenarios = form.getAll("scenarios");
   for (const field of ["repeats", "seed", "concurrency", "observation_seconds", "theft_delay_seconds", "observation_margin_seconds", "probe_interval_seconds", "s3_probe_interval_seconds", "budget_usd"]) config[field] = Number(config[field]);
   config.ttl_seconds = config.ttl_seconds.split(",").map(x => Number(x.trim()));
@@ -156,10 +164,10 @@ $("mode").addEventListener("change", () => { const real = $("mode").value === "l
 $("phase").addEventListener("change", () => { if ($("phase").value === "full") { $("mode").value = "llm"; $("mode").dispatchEvent(new Event("change")); $("observation").value = "3605"; $("run-form").elements.repeats.value = "30"; } });
 $("refresh-preflight").addEventListener("click", preflight);
 $("trace-file").addEventListener("change", loadTrace);
-$("reset-button").addEventListener("click", async () => { try { const result = await api("/api/reset",{method:"POST"}); $("run-form").reset(); $("mode").dispatchEvent(new Event("change")); selected=null; lastRunCount=-1; $("evidence-actions").hidden=true; $("trace-content").textContent="Console reset. Preserved batches remain in collection history."; $("trace-image").hidden=true; $("trace-content").hidden=false; $("selected-label").textContent="Select a collection batch above"; $("trace-file").replaceChildren(node("option","Select a batch first")); $("run-list").replaceChildren(); comparison([]); notify(result.message); await refreshJobs(); } catch(error) { notify(error.message,true); } });
+$("reset-button").addEventListener("click", async () => { try { const result = await api("/api/reset",{method:"POST"}); $("run-form").reset(); $("mode").dispatchEvent(new Event("change")); selected=null; lastRunCount=-1; $("evidence-actions").hidden=true; $("quality-warning").hidden=true; $("collection-provenance").textContent=""; $("trace-content").textContent="Console reset. Preserved batches remain in collection history."; $("trace-image").hidden=true; $("trace-content").hidden=false; $("selected-label").textContent="Select a collection batch above"; $("trace-file").replaceChildren(node("option","Select a batch first")); $("run-list").replaceChildren(); comparison([]); notify(result.message); await refreshJobs(); } catch(error) { notify(error.message,true); } });
 $("cancel-button").addEventListener("click", async () => { if (!selected) return; try { await api(`/api/jobs/${selected}/cancel`,{method:"POST"}); notify("Collection cancelled. Partial observations remain preserved for inspection."); await refreshJobs(); await loadEvidence(); } catch(error) { notify(error.message,true); } });
 preflight(); refreshJobs(); setInterval(refreshJobs, 2500);
 
-$("load-preset").addEventListener("click", async () => { try { const config = await api("/api/configs/" + $("preset").value); const form = $("run-form"); for (const [name,value] of Object.entries(config)) { if (["conditions","scenarios"].includes(name)) { for (const el of form.querySelectorAll(`input[name="${name}"]`)) el.checked = value.includes(el.value); } else if (form.elements[name]) form.elements[name].value = Array.isArray(value) ? value.join(",") : value; } $("mode").dispatchEvent(new Event("change")); notify("Repository configuration loaded. Review the budget and prerequisites before starting."); await preflight(); } catch(error) { notify(error.message,true); } });
+$("load-preset").addEventListener("click", async () => { try { const config = await api("/api/configs/" + $("preset").value); const form = $("run-form"); form.elements.system_prompt_profile.value = "original-v1"; form.elements.protocol_id.value = ""; form.elements.study_kind.value = ""; for (const [name,value] of Object.entries(config)) { if (["conditions","scenarios"].includes(name)) { for (const el of form.querySelectorAll(`input[name="${name}"]`)) el.checked = value.includes(el.value); } else if (form.elements[name]) form.elements[name].value = Array.isArray(value) ? value.join(",") : value; } $("mode").dispatchEvent(new Event("change")); notify("Repository configuration loaded. Review the budget and prerequisites before starting."); await preflight(); } catch(error) { notify(error.message,true); } });
 
 $("model").addEventListener("change", preflight);

@@ -311,3 +311,137 @@ def test_external_operator_interruption_is_not_reported_as_infrastructure_failur
     assert "infrastructure failures" not in result["message"]
     assert marker.read_bytes() == original
     assert not (folder / "job.json").exists()
+
+
+def test_sealed_temporary_checkpoint_is_complete_safe_json_export(console):
+    client, manager, repo = console
+    import hashlib
+    folder = manager.root / "sealed-tmp-cli"
+    run = folder / "runs" / "run-1"
+    run.mkdir(parents=True)
+    (folder / "manifest.json").write_text('{"mode":"llm","phase":"full"}')
+    (folder / "config.json").write_text('{"mode":"llm","phase":"full"}')
+    (folder / "batch-status.json").write_text('{"remaining_failures":0}')
+    checkpoint = run / "checkpoint.json.tmp"
+    original = b'\xef\xbb\xbf{"count": 4, "credential": "temporary-disposable-bearer"}\r\n'
+    checkpoint.write_bytes(original)
+    manifest = run / "raw-manifest.json"
+    manifest.write_text(json.dumps({"files": {"checkpoint.json.tmp": hashlib.sha256(original).hexdigest()}}))
+    (run / "other.json.tmp").write_text('{"count":4}')
+    (folder / "checkpoint.json.tmp").write_bytes(original)
+    path = "runs/run-1/checkpoint.json.tmp"
+    response = client.get("/api/jobs/sealed-tmp-cli/trace", params={"path": path})
+    assert response.status_code == 200
+    assert response.json() == {"count": 4, "credential": "[REDACTED]"}
+    assert client.get("/api/jobs/sealed-tmp-cli/trace", params={"path":"runs/run-1/other.json.tmp"}).status_code == 404
+    assert client.get("/api/jobs/sealed-tmp-cli/trace", params={"path":"checkpoint.json.tmp"}).status_code == 404
+    assert client.get("/api/jobs/sealed-tmp-cli/trace", params={"path":"../../checkpoint.json.tmp"}).status_code == 404
+    exported = client.get("/api/jobs/sealed-tmp-cli/bundle")
+    with zipfile.ZipFile(io.BytesIO(exported.content)) as archive:
+        assert json.loads(archive.read("results/" + path)) == response.json()
+        assert "results/runs/run-1/other.json.tmp" not in archive.namelist()
+        sums = json.loads(archive.read("SHA256SUMS.json"))
+        assert hashlib.sha256(archive.read("results/" + path)).hexdigest() == sums["results/" + path]
+    assert checkpoint.read_bytes() == original
+    checkpoint.write_text('{"count":5}')
+    assert client.get("/api/jobs/sealed-tmp-cli/trace", params={"path":path}).status_code == 404
+    manifest.write_text('{"files":{}}')
+    assert client.get("/api/jobs/sealed-tmp-cli/trace", params={"path":path}).status_code == 404
+
+
+def test_quality_failure_and_unit_counts_do_not_rewrite_retained_attempts(console):
+    client, manager, repo = console
+    folder = manager.root / "quality-cli"
+    folder.mkdir()
+    (folder / "manifest.json").write_text('{"mode":"llm","phase":"full"}')
+    (folder / "config.json").write_text('{"mode":"llm","phase":"full"}')
+    (folder / "batch-status.json").write_text('{"remaining_failures":0}')
+    validation = folder / "validation.json"
+    validation.write_text('{"passed":false,"errors":["handoff exceeded tolerance"]}')
+    original = validation.read_bytes()
+    for run_id, status in [("failed-original","infrastructure_error"),("replacement","completed"),("duplicate","completed")]:
+        run = folder / "runs" / run_id
+        run.mkdir(parents=True)
+        (run / "summary.json").write_text(json.dumps({"condition":"C1","pair_id":"S4-300-now-603","status":status}))
+    snapshot = client.get("/api/jobs/quality-cli").json()
+    assert snapshot["status"] == "completed"
+    assert snapshot["quality"] == {"status":"failed","errors":["handoff exceeded tolerance"]}
+    assert snapshot["completed_runs"] == 1
+    assert snapshot["retained_failed_runs"] == 1
+    assert snapshot["recorded_attempts"] == 3
+    assert len(client.get("/api/jobs/quality-cli/runs").json()) == 3
+    assert len(client.get("/api/jobs/quality-cli/export.json").json()) == 3
+    assert validation.read_bytes() == original
+
+
+def test_prompt_profile_and_extension_config_provenance(console):
+    from dashboard.app import ExperimentConfig
+    from pydantic import ValidationError
+    client, manager, repo = console
+    config = ExperimentConfig(system_prompt_profile="neutral-v1", protocol_id="extension-v1", study_kind="exploratory-neutral-pilot")
+    assert config.system_prompt_profile == "neutral-v1"
+    assert ExperimentConfig().system_prompt_profile == "original-v1"
+    assert "protocol_id" not in ExperimentConfig().model_dump(exclude_none=True)
+    with pytest.raises(ValidationError):
+        ExperimentConfig(system_prompt_profile="silent-fallback")
+    with pytest.raises(ValidationError):
+        ExperimentConfig(protocol_id="../../outside")
+    (repo / "configs").mkdir()
+    for name in ["neutral-pilot", "enforcement-stress"]:
+        (repo / "configs" / (name + ".json")).write_text(config.model_dump_json(exclude_none=True))
+        loaded = client.get("/api/configs/" + name)
+        assert loaded.status_code == 200
+        assert loaded.json()["system_prompt_profile"] == "neutral-v1"
+        assert loaded.json()["protocol_id"] == "extension-v1"
+    page = client.get("/").text
+    assert 'id="system-prompt-profile"' in page
+    assert 'id="quality-warning"' in page
+
+
+def test_clean_gzip_preserves_sealed_bytes_and_redaction_is_explicit(console, monkeypatch):
+    import hashlib
+    client, manager, repo = console
+    secret = "provider-private-value-should-never-export"
+    monkeypatch.setenv("DEEPSEEK_API_KEY", secret)
+    folder = manager.root / "gzip-sealed-cli"
+    run = folder / "runs" / "run-1"
+    run.mkdir(parents=True)
+    (folder / "manifest.json").write_text('{"mode":"llm","phase":"pilot"}')
+    (folder / "config.json").write_text('{"mode":"llm","phase":"pilot"}')
+    (folder / "batch-status.json").write_text('{"remaining_failures":0}')
+    # More than 2 MB decoded, with each record bounded below the 1 MB limit.
+    lines = [json.dumps({"action":"read", "description":"safe" * 20000}, separators=(",", ":")) + "\r\n" for _ in range(30)]
+    clean = gzip.compress("".join(lines).encode(), compresslevel=1, mtime=1712345678)
+    changed = gzip.compress(("".join(lines) + json.dumps({"api_key":secret}) + "\n").encode(), compresslevel=1, mtime=1712345678)
+    (run / "audit.jsonl.gz").write_bytes(clean)
+    (run / "actions.jsonl.gz").write_bytes(changed)
+    seals = {"audit.jsonl.gz":hashlib.sha256(clean).hexdigest(), "actions.jsonl.gz":hashlib.sha256(changed).hexdigest()}
+    raw_manifest = json.dumps({"files":seals},indent=2).encode()
+    (run / "raw-manifest.json").write_bytes(raw_manifest)
+    exported = client.get("/api/jobs/gzip-sealed-cli/bundle")
+    assert exported.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(exported.content)) as archive:
+        clean_name = "results/runs/run-1/audit.jsonl.gz"
+        changed_name = "results/runs/run-1/actions.jsonl.gz"
+        assert archive.read(clean_name) == clean
+        assert hashlib.sha256(archive.read(clean_name)).hexdigest() == seals["audit.jsonl.gz"]
+        assert archive.read("results/runs/run-1/raw-manifest.json") == raw_manifest
+        redacted = gzip.decompress(archive.read(changed_name))
+        assert secret.encode() not in redacted
+        assert json.loads(redacted.splitlines()[-1]) == {"api_key":"[REDACTED]"}
+        assert archive.read(changed_name) != changed
+        provenance = json.loads(archive.read("EXPORT_PROVENANCE.json"))
+        assert clean_name not in provenance["altered_files"]
+        assert provenance["altered_sealed_members"] == [changed_name]
+        assert provenance["missing_sealed_members"] == []
+        assert provenance["original_raw_manifests_preserved"] is True
+        assert "CANNOT validate" in provenance["warning"]
+        assert "NOT PERFORMED" in provenance["raw_seal_validation"]
+        entry = provenance["altered_files"][changed_name]
+        assert entry["original_sha256"] == seals["actions.jsonl.gz"]
+        assert entry["exported_sha256"] == hashlib.sha256(archive.read(changed_name)).hexdigest()
+        sums = json.loads(archive.read("SHA256SUMS.json"))
+        assert sums["EXPORT_PROVENANCE.json"] == hashlib.sha256(archive.read("EXPORT_PROVENANCE.json")).hexdigest()
+    assert (run / "audit.jsonl.gz").read_bytes() == clean
+    assert (run / "actions.jsonl.gz").read_bytes() == changed
+    assert (run / "raw-manifest.json").read_bytes() == raw_manifest
