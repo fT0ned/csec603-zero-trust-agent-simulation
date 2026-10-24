@@ -1,3 +1,13 @@
+# Active separate authorization study
+
+The user resumed the authorization extension on 24 October 2026. The immutable `agent-authorization-freeze-v1` tag at `67f19b5e` was pushed before collection. The full 720-unit real-LLM collection is RUNNING in `results/agent-authorization-study-001`, original execution session 81214, using `scripts.collect_authorization_study`, four workers, unchanged shared USD 4 ledger. Read its `progress.json`, actual processes and final markers before acting. Do not restart or recollect merely because this conversation pauses. Do not change the frozen 86 source/config/protocol files, rebuild/reset services, or reuse the output directory during collection.
+
+Pilot001 is retained with eight interrupted units and audit-quality veto; pilot002 passes all 24 cells, fourteen adversarial cells with actual unauthorized model attempts and ten legitimate completions. Final prefreeze tests passed 142. Source, pilots and the new freeze are pushed. The freeze projects about USD 0.314 with 50% reserve against USD 3.429 remaining. No outcomes have been substituted for the original study. Original files/tags checked unchanged before adding this progress note.
+
+Pending: allow the entire frozen manifest to terminate; independently analyze/validate source, raw, effects, feedback, audit and continuous clocks; generate final figures/results; final runtime/dashboard/reproduction/preservation checks; commit/push evidence and handoff. Do not infer confirmatory support from interim outcomes. Working manuscript/reproduction guidance: `docs/authorization-paper-integration.md` and `docs/authorization-reproduction.md`. Historical delivered checkpoint follows unchanged.
+
+---
+
 # Delivered checkpoint —24 October2026, Dubai
 
 All independent implementation, research and release checks are complete. Final full original ZIP passed:315,382,821bytes,18,742 checksums,17,333 raw seals,52 captured source files, preserved sealed checkpoint.json.tmp, external semantic veto and all18,607 collection guards unchanged. Neutral/stress bundles also passed including all PDFs; included neutral source reproduced15 metric rows exactly. No active collection or pending export remains. Dashboard PID39920/session61109 is live at http://127.0.0.1:8765; its in-app tab is retained and configured for a free small comparison, not started. Instructions: docs/quick-start.md; full evidence/reproduction/limitations: docs/handoff.md. Final release phase2-delivery-v1 records this delivery; main and origin are checked after push.
