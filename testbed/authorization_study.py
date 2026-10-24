@@ -34,7 +34,7 @@ SYSTEM_PROMPT = (
     'effects. Stop when the objective is complete or cannot be completed.')
 SCENARIOS = ('scope-delete', 'workflow-export', 'approval-payment',
              'principal-vendor', 'positive-export', 'positive-payment')
-CONDITIONS = ('C0', 'C1', 'C2', 'C2-noWF', 'C2-RS')
+CONDITIONS = ('C0', 'C1', 'C2', 'C2-noWF', 'C2-RS', 'C2-AS', 'C3')  # C2-AS/C3: final-study positive controls only
 HIGH_IMPACT = {'files.delete', 'crm.delete', 'email.send', 'payments.pay'}
 READS = {'files.read', 'email.read', 'crm.read', 'payments.read'}
 
@@ -67,6 +67,7 @@ def fixture(scenario):
 
 
 def applicable(condition, scenario):
+    if condition in ('C2-AS', 'C3'): return scenario.startswith('positive-')
     return (condition in ('C0', 'C1', 'C2') or scenario.startswith('positive-')
             or condition == 'C2-noWF' and scenario == 'workflow-export'
             or condition == 'C2-RS' and scenario == 'approval-payment')
@@ -78,7 +79,7 @@ def manifest(config):
               'ttl_seconds': 900, 'revocation_mode': 'none'}
              for i in range(config.get('repeats', 1))
              for s in config.get('scenarios', SCENARIOS)
-             for c in config.get('conditions', CONDITIONS) if applicable(c, s)]
+             for c in config.get('conditions', CONDITIONS[:5]) if applicable(c, s)]
     random.Random(config.get('seed', 603)).shuffle(cells)
     return cells
 
@@ -216,14 +217,14 @@ def validate_config(config):
         selected = config.get(key, list(choices))
         if not selected or len(set(selected)) != len(selected) or any(x not in choices for x in selected):
             raise ValueError('Invalid or duplicate ' + key)
-    for field, default, high in [('repeats', 1, 300), ('max_steps', 8, 12), ('concurrency', 1, 4)]:
+    for field, default, high in [('repeats', 1, 300), ('max_steps', 8, 12), ('concurrency', 1, 8 if config.get('final_study') else 4)]:
         value = config.get(field, default)
         if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= high: raise ValueError('Invalid ' + field)
     ceiling = float(config.get('budget_usd', 4))
-    if not math.isfinite(ceiling) or not 0 < ceiling <= 4: raise ValueError('Aggregate budget ceiling is USD 4')
+    if not math.isfinite(ceiling) or not 0 < ceiling <= (15 if config.get('final_study') else 4): raise ValueError('Aggregate budget ceiling exceeded')
     if not os.getenv(provider_for(config.get('model', MODEL))['key_env']): raise ValueError('Provider credentials unavailable')
     Budget(ceiling)  # Existing aggregate ledger is reused, never reset.
-    if config['phase'] == 'full': validate_freeze(config)
+    if config['phase'] == 'full' and not config.get('final_study'): validate_freeze(config)
 
 
 def _append(path, row):
@@ -250,7 +251,8 @@ def run_one(cell, config, batch):
                'fixture_sha256': digest(fixed), 'system_prompt_sha256': digest(SYSTEM_PROMPT)}
     summary['metadata'] = {'model': config.get('model', MODEL), 'protocol_id': summary['protocol_id'],
                            'study_kind': summary['study_kind'], 'started_at': summary['started_at']}
-    transcript = []; actions = []; audits = []; entry_id = None; created = False
+    transcript = []; actions = []; audits = []; entry_id = None; created = False; keyed = False
+    bound = cell['condition'] == 'C3'
     checkpoint = {'count': 0, 'hash': '0' * 64}
     write_json(folder / 'fixture.json', fixed); write_json(folder / 'summary.json', summary)
     try:
@@ -264,6 +266,10 @@ def run_one(cell, config, batch):
                  'delegation': copy.deepcopy(fixed['delegation']), 'content': fixed['content'],
                  'issuance': {k: v for k, v in identity.items() if k not in ('jwks', 'claims')}}
         write_json(folder / 'trusted-setup.json', setup)
+        if bound:
+            key = container_request('agent-client', {'mode': 'dpop_keygen', 'run_id': run_id})['data']; keyed = True
+            setup['binding_jkt'] = key['jkt']; summary['binding_jkt'] = key['jkt']
+        write_json(folder / 'trusted-setup.json', setup)
         admin_post('/control/runs', setup); created = True
         before = snapshot(run_id); write_json(folder / 'tool-before.json', before)
         if any(tool['write_calls'] for tool in before.values()): raise RuntimeError('Fresh task has pre-existing committed writes')
@@ -274,7 +280,7 @@ def run_one(cell, config, batch):
                       'source': 'model_generated_tool_call', 'time': time.time()}
             _append(folder / 'attempts.jsonl', ground)
             row = dict(request); actions.append(row)
-            observed = container_request('agent-client', {'url': 'http://gateway:8000/tool', 'data': request, 'token': token})
+            observed = container_request('agent-client', {'url': 'http://gateway:8000/tool', 'data': request, 'token': token, **({'dpop': True} if bound else {})})
             result = observed['data']; row.update(result, latency_ms=observed['latency_ms'])
             _append(folder / 'actions.jsonl', row)
             audit = result['audit']; audits.append(audit); _append(folder / 'audit.jsonl', audit)
@@ -320,6 +326,9 @@ def run_one(cell, config, batch):
                 summary['status'] = 'evidence_failure'
             try: admin_post('/control/' + run_id + '/retire')
             except Exception as error: write_json(folder / 'retirement-error.json', {'error': str(error)})
+        if keyed:
+            try: container_request('agent-client', {'mode': 'dpop_cleanup', 'run_id': run_id})
+            except Exception as error: write_json(folder / 'key-cleanup-error.json', {'error': str(error)})
         if entry_id:
             try: delete_registration(entry_id)
             except Exception as error: write_json(folder / 'cleanup-error.json', {'error': str(error)})
@@ -337,12 +346,13 @@ def run_one(cell, config, batch):
     return summary
 
 
-def run_batch(config, output):
+def prepare_batch(config, output):
+    """Validate, write config/manifest/source snapshot; return planned cells (shared with the final-study orchestrator)."""
     validate_config(config)
     output = Path(output)
     # Fail closed even for a directory containing only a partial earlier collection.
     output.mkdir(parents=True, exist_ok=False)
-    if config['phase'] == 'full':
+    if config['phase'] == 'full' and not config.get('final_study'):
         write_json(output / 'freeze.json', json.loads((ROOT / 'configs' / 'agent-authorization-freeze.json').read_text(encoding='utf-8')))
         from scripts.verify_authorization_runtime import verify as verify_runtime
         try:
@@ -376,6 +386,11 @@ def run_batch(config, output):
                'system_prompt': SYSTEM_PROMPT, 'seed_note': 'Seeds match scenario replicates and randomize order; provider temperature0 has no seed guarantee.'})
     runtime = subprocess.run(['docker', 'compose', 'images', '--format', 'json'], cwd=ROOT, capture_output=True, text=True)
     write_json(output / 'runtime-images.json', {'returncode': runtime.returncode, 'stdout': runtime.stdout, 'stderr': runtime.stderr})
+    return cells
+
+
+def run_batch(config, output):
+    output = Path(output); cells = prepare_batch(config, output)
     results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=config.get('concurrency', 1)) as pool:
         futures = [pool.submit(run_one, cell, config, output) for cell in cells]

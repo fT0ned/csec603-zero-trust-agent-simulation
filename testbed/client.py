@@ -72,7 +72,10 @@ def main():
     if data.get('mode')=='replay': replay(data);return
     if not data.get('probe'):
         print(json.dumps(request(data)));return
-    timing=data['probe'];start=time.monotonic();next_probe=start+max(0,timing.get('first_probe_at',time.time())-time.time())
+    timing=data['probe'];start=time.monotonic()
+    # first_probe_delay (monotonic, final study) replaces the wall-clock first_probe_at when supplied.
+    next_probe=start+(timing['first_probe_delay'] if 'first_probe_delay' in timing else max(0,timing.get('first_probe_at',time.time())-time.time()))
+    extended=bool(timing.get('extended'))
     while True:
         wait=next_probe-time.monotonic()
         if wait>0: time.sleep(wait)
@@ -83,7 +86,7 @@ def main():
             result={'status':0,'data':{'transport_error_type':type(error).__name__},'latency_ms':None,'time':time.time()}
         result['request']=dict(data['data'])
         result['elapsed_seconds']=time.monotonic()-start
-        try: result['probe_classification']=classify_probe(result['status'],result['data'])
+        try: result['probe_classification']=classify_probe(result['status'],result['data'],extended)
         except ProbeMeasurementError as error:
             result['probe_classification']='measurement_failure';result['probe_measurement_error']=error.details
         print(json.dumps(result),flush=True)
