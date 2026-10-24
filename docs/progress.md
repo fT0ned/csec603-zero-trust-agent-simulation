@@ -1,3 +1,13 @@
+# Completed separate real LLM authorization study
+
+The separate `agent-authorization-study-001` completed720/720 planned runs with no failures/reruns under pushed `agent-authorization-freeze-v1` (67f19b5e). Frozen analysis and independent cross-checks passed; all10 new A1-A3 contrasts supported. C0/C1 each committed150 unauthorized mutations; C2 committed0 and denied163 requests. noWF exported20 versus C2's10; RS committed30/30 unrequested payments versus C2's0/30. All300 authorized positive workflows completed, with0 false denials. Extra read attempts remain separately reported. Original hypotheses/nulls/quality vetoes unchanged.
+
+Final suite145 passed;10800 raw files and87 captured sources verified;3377 tamper-copy checks;clock2070 samples passed. Fourteen original artifacts and seven included-source archive analysis outputs reproduced byte-identically. Corrected ZIP15848602bytes passes11770checksums;failed first export receipt retained and source-fixture redaction corrected without changing research. Shared ledger6585settled/0pending/USD0.768644778 of4. All31552 original protected files/content and original tags preserved, plus86 frozen sources unchanged. DashboardPID42520/session72420 at http://127.0.0.1:8765. No collection active.
+
+Read docs/authorization-handoff.md and docs/authorization-findings.md. Paper integration, exact Appendix A locations, remaining primary-reference checks, contribution statements and final IEEE rendering remain author work. Final evidence/source/reports use delivery tag `agent-authorization-delivery-v1`. Historical running checkpoint and original delivery remain below unchanged.
+
+---
+
 # Active separate authorization study
 
 The user resumed the authorization extension on 24 October 2026. The immutable `agent-authorization-freeze-v1` tag at `67f19b5e` was pushed before collection. The full 720-unit real-LLM collection is RUNNING in `results/agent-authorization-study-001`, original execution session 81214, using `scripts.collect_authorization_study`, four workers, unchanged shared USD 4 ledger. Read its `progress.json`, actual processes and final markers before acting. Do not restart or recollect merely because this conversation pauses. Do not change the frozen 86 source/config/protocol files, rebuild/reset services, or reuse the output directory during collection.

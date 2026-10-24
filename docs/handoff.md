@@ -1,3 +1,9 @@
+# Completed separate authorization study
+
+The new 720-run real-LLM study is complete. Read [the current handoff](authorization-handoff.md), [measured findings](authorization-findings.md) and [reproduction guide](authorization-reproduction.md). The original delivery and instructions follow unchanged.
+
+---
+
 # Phase 2 research testbed handoff
 
 Research collection and release verification are complete. Release tag: `phase2-delivery-v1`. Start with the [plain-English guide](quick-start.md) to run your own experiments and change settings. The original study remains quality-vetoed; the separately reviewed [conditional timing sensitivity](timing-sensitivity-findings.md) is complete. The GitHub-hosted secret-scanning eligibility requirement remains the explicit external blocker described below.

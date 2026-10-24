@@ -1,3 +1,9 @@
+# Completed separate authorization study
+
+The new 720-run real-LLM study is complete. Read [the current handoff](authorization-handoff.md), [measured findings](authorization-findings.md) and [reproduction guide](authorization-reproduction.md). The original delivery and instructions follow unchanged.
+
+---
+
 # Run your own experiment
 
 ## Open it

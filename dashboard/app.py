@@ -254,10 +254,16 @@ def zip_sanitized(archive, path: Path, name: str):
     with path.open("rb") as raw:
         raw_checksum = hashlib.file_digest(raw, "sha256").hexdigest()
     secret_values = tuple(secret for key, secret in os.environ.items() if SECRET_ENV_PATTERN.search(key) and len(secret) >= 12)
+    # This exact reviewed source fixture contains a deliberately fake sk-test
+    # literal. Preserve its reproducibility bytes, never an edited file or an
+    # actual locally configured secret (even one equal to the fake literal).
+    fixture_hashes = {"489b94e5b90fcade4db1d2e0011952e652023cd020b906cb5c6be3358f9e9331"}
+    verbatim_fixture = (name.startswith("source/tests/") and raw_checksum in fixture_hashes
+                        and not any(s.encode() in path.read_bytes() for s in secret_values))
     compressed_trace = path.name.endswith(".jsonl.gz")
     changed = gzip_needs_redaction(path, secret_values) if compressed_trace else False
     with archive.open(name, "w", force_zip64=True) as member:
-        if compressed_trace and not changed:
+        if verbatim_fixture or compressed_trace and not changed:
             # gzip headers, compression settings, whitespace, and raw seals survive.
             with path.open("rb") as raw:
                 while content := raw.read(1024 * 1024):

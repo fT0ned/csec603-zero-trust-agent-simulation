@@ -56,3 +56,7 @@ CSV/JSON exports and traces describe the selected collection. Keep pilot and con
 ## Remaining paper work
 
 Integrate the new methods, measured tables/figures and limitations into the existing Overleaf manuscript, while retaining original null and conditional findings. Fill Appendix A with actual final manuscript locations, resolve outstanding primary-reference checks, verify author contribution statements, and inspect the final IEEE PDF. Neither the live Overleaf source nor the referenced instructor email is available in the supplied files, so those checks cannot be claimed completed by this repository handoff.
+
+## Reanalysis from the exported ZIP
+
+The ZIP places captured `source/` beside `results/`. In a fresh extracted directory, copy `source/` byte-for-byte to `results/source/`, then execute the included `analysis.authorization_study` module with working directory `source/`, input `../results` and a fresh output `../reanalyzed`. This supplies the frozen analyzer and its expected captured-source layout. The actual exported archive reproduced all seven analysis outputs byte-for-byte; see `docs/verification/authorization-included-source-reanalysis.json`. The additional publication workflow figure only changes legend placement; frozen plot files and their original manifest remain preserved.
