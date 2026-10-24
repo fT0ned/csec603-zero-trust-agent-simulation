@@ -20,6 +20,7 @@ def sign(data):
 def request(data):
     body = json.dumps(data['data']).encode() if data.get('data') is not None else None
     headers = {'Content-Type':'application/json', 'Authorization':'Bearer '+data.get('token','')}
+    if data.get('dpop'): from . import binding  # library import excluded from sign_ms; key load + signing included
     signing = time.perf_counter()
     if data.get('dpop'): headers['DPoP'] = sign(data)
     sign_ms = (time.perf_counter()-signing)*1000
