@@ -144,3 +144,16 @@ def test_resume_and_infrastructure_rerun_selection(tmp_path):
     assert {r['cell_id'] for r in redo} == {cells[1]['cell_id'], cells[2]['cell_id']} and all(r['rerun_of'] for r in redo)
     put('r4', cells[1], 'completed', rerun_of='r2')
     assert cells[1]['cell_id'] not in {r['cell_id'] for r in fs.infra_reruns('C', cells, tmp_path)}
+
+
+def test_paper_package_builds_from_pilot_analysis(tmp_path):
+    import shutil
+    pilot = ROOT / 'results' / 'final-study-pilot-001'
+    if not (pilot / 'analysis' / 'report.json').exists():
+        pytest.skip('pilot analysis not present')
+    shutil.copytree(pilot / 'analysis', tmp_path / 'analysis')
+    from analysis import final_study_report
+    out = final_study_report.build(pilot, tmp_path / 'analysis')
+    text = (tmp_path / 'analysis' / 'paper-package.md').read_text(encoding='utf-8')
+    assert 'mechanism verification' in text and 'Threats to validity' in text and out['nulls'] >= 0
+    assert (tmp_path / 'analysis' / 'fig-part-c-lockout.svg').exists()
