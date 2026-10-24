@@ -166,7 +166,7 @@ async def tool(request: Request):
 async def execute(run_id: str, request: Request):
     admin(request)
     if ROLE != 'pa': raise HTTPException(404)
-    data = await request.json(); state = RUNS.get(run_id)
+    data = await request.json(); state = RUNS.get(run_id); received = time.time()
     if state is None: raise HTTPException(404)
     try: validate_action(data.get('action'), data.get('params'))
     except ValueError as e: raise HTTPException(422, str(e))
@@ -205,6 +205,18 @@ async def execute(run_id: str, request: Request):
         # enforcing state if revocation landed between them; authority is unchanged.
         if state['revoked']: reason = 'revoked'
         elif state['suspended']: reason = 'suspended'
+        containment = None
+        # C2-AS/C3-AS: socket-peer origin differing from the run's expected origin is an impersonation signal.
+        if (state['condition'] in AUTO and not state['suspended'] and data.get('origin') != state.get('expected_origin')
+                and data.get('credential_reason') != 'credential mismatch'):
+            allow = False; reason = 'origin_mismatch'; state['suspended'] = True; state['grants'].clear()
+            try:
+                revoked = await HTTP.post(os.getenv('GATEWAY_URL','http://gateway:8000')+'/internal/revoke',
+                    json={'credential_id':state['credential_id']},headers={'x-admin-secret':ADMIN}); revoked.raise_for_status()
+                containment = {'response_action':'suspend_and_revoke','trigger':'origin_mismatch','detected_at':received,
+                    'contained_at':revoked.json()['active_at'],'detection_to_containment_ms':(revoked.json()['active_at']-received)*1000}
+            except Exception:
+                containment = {'response_action':'suspend_only_revoke_failed','trigger':'origin_mismatch','detected_at':received,'contained_at':None,'detection_to_containment_ms':None}
         policy_input = None; policy_result = None; policy_error=False;jit_evidence=None
         if allow and c2f(state['condition']):
             policy_input = {'condition':state['condition'],'action':data['action'],'params':data['params'],
@@ -279,6 +291,8 @@ async def execute(run_id: str, request: Request):
                 'policy_input':policy_input,'policy_result':policy_result,'workflow':dict(state['workflow']),
                 'runtime_signals':{'suspended':state['suspended'],'revoked':state['revoked'],'credential_valid':data.get('credential_valid',False)},
                 'jit_grant':jit_evidence})
+            if containment: row.update(containment)
+            elif state['condition'] in AUTO and links: row.update(response_action='require_approval',trigger='parameter_provenance')
         append_record(run_id,state,row)
         if outcome=='executed' and data['action'] in ['files.read','email.read','crm.read']:
             content=canonical(result.get('result'))
