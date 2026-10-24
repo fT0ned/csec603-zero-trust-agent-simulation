@@ -107,3 +107,16 @@ def test_container_request_uses_utf8_for_non_ascii_model_text(monkeypatch):
     monkeypatch.setattr(runner.subprocess, 'run', fake)
     runner.container_request('agent-client', {'x': 'a \u2014 b'})
     assert seen['encoding'] == 'utf-8' and seen['text'] is True
+
+
+def test_combined_analysis_runs_on_pilot_collection(tmp_path):
+    pilot = ROOT / 'results' / 'final-study-pilot-001'
+    if not (pilot / 'final-manifest.json').exists():
+        pytest.skip('pilot collection not present')
+    from analysis import final_study
+    report = final_study.analyse(pilot, tmp_path / 'analysis', 100)
+    assert report['completeness']['part_a_complete'] and report['completeness']['part_b_complete'] and report['completeness']['part_c_complete']
+    assert not report['completeness']['errors']
+    assert (tmp_path / 'analysis' / 'comparative-analysis.md').exists()
+    again = final_study.analyse(pilot, tmp_path / 'analysis2', 100)
+    assert (tmp_path / 'analysis' / 'h-verdicts.csv').read_text() == (tmp_path / 'analysis2' / 'h-verdicts.csv').read_text()

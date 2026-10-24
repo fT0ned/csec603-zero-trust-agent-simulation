@@ -1,0 +1,24 @@
+# Availability cost of auto-suspend and false denials
+
+| Source | Condition | Legitimate agent allowed after attack / false denials |
+|---|---|---|
+| A S3/300s/none | C2-AS | 0/2 (0.0%; 95% CI 0.0-65.8%) |
+| A S3/300s/none | C3 | 2/2 (100.0%; 95% CI 34.2-100.0%) |
+| A S3/300s/none | C3-AS | 0/2 (0.0%; 95% CI 0.0-65.8%) |
+| A S4/300s/expiry | C2-AS | 0/2 (0.0%; 95% CI 0.0-65.8%) |
+| A S4/300s/now | C2-AS | 0/2 (0.0%; 95% CI 0.0-65.8%) |
+| A S4/300s/expiry | C3 | 2/2 (100.0%; 95% CI 34.2-100.0%) |
+| A S4/300s/now | C3 | 2/2 (100.0%; 95% CI 34.2-100.0%) |
+| A S4/300s/expiry | C3-AS | 0/2 (0.0%; 95% CI 0.0-65.8%) |
+| A S4/300s/now | C3-AS | 0/2 (0.0%; 95% CI 0.0-65.8%) |
+| C | C1 | 2/2 {"valid": 2} |
+| C | C2 | 2/2 {"allowed": 2} |
+| C | C2-AS | 0/2 {"suspended": 2} |
+| C | C3 | 2/2 {"allowed": 2} |
+| C | C3-AS | 0/2 {"suspended": 2} |
+| B positive-export | C2 | false denials 0 of 4 authorized attempts |
+| B positive-export | C2-AS | false denials 0 of 4 authorized attempts |
+| B positive-export | C3 | false denials 0 of 4 authorized attempts |
+| B positive-payment | C2 | false denials 0 of 6 authorized attempts |
+| B positive-payment | C2-AS | false denials 0 of 5 authorized attempts |
+| B positive-payment | C3 | false denials 0 of 6 authorized attempts |
