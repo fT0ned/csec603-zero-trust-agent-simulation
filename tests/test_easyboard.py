@@ -44,7 +44,7 @@ def test_missing_files_and_unknown_study_are_graceful(tmp_path):
     assert s['present'] is False and 'Not run' in s['takeaway']
     assert data.get_study('nope', tmp_path) is None
     o = data.overview(tmp_path)
-    assert [x['id'] for x in o['studies']] == ['binding-study-001']
+    assert [x['id'] for x in o['studies']] == ['final-study-001', 'binding-study-001']
     (tmp_path / 'study-002').mkdir()  # folder without runs or manifest
     assert data.get_study('study-002', tmp_path, ttl=0)['runs_counted'] == 0
 
@@ -74,3 +74,23 @@ def test_free_port_skips_busy():
     with socket.socket() as busy:
         busy.bind(('127.0.0.1', 0)); port = busy.getsockname()[1]
         assert server.free_port(port) != port
+
+
+def test_final_study_is_main_and_merges_parts(tmp_path):
+    root = tmp_path / 'final-study-001'
+    (root).mkdir()
+    (root / 'final-manifest.json').write_text(json.dumps({'phase': 'full', 'total': 5}))
+    def put(part, rid, **s):
+        d = root / part / 'runs' / rid; d.mkdir(parents=True)
+        (d / 'summary.json').write_text(json.dumps({'run_id': rid, 'status': 'completed', 'mode': 'llm', 'phase': 'full', **s}))
+    put('part-a', 'a1', condition='C0', scenario='S2', unauthorized_outcome=True)
+    put('part-a', 'a2', condition='C3', scenario='S3', unauthorized_outcome=False, event_observed=True, exposure_seconds=0.0)
+    put('part-a', 'a3', condition='C3', scenario='S3', unauthorized_outcome=True, event_observed=True, exposure_seconds=0.0)
+    put('part-a', 'a3r', condition='C3', scenario='S3', unauthorized_outcome=False, event_observed=True, exposure_seconds=0.0, timing_rerun_of='a3')
+    put('part-c', 'c1', condition='C3', cell_id='C3-00', first_attacker_success=False, legit_task_completed=True, event_observed=True)
+    o = data.overview(tmp_path)
+    assert o['studies'][0]['id'] == 'final-study-001' and o['studies'][0]['main'] is True and o['studies'][0]['planned'] == 5
+    s = data.get_study('final-study-001', tmp_path, ttl=0)
+    by = {r['key']: r for r in s['conditions']}
+    assert s['runs_total'] == 4 and by['C3']['runs'] == 3 and by['C3']['bad'] == 0 and by['C0']['bad'] == 1  # replaced original not counted
+    assert 'Stolen-ID replay with real AI (Part C)' in s['scenarios']

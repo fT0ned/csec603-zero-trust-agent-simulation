@@ -22,6 +22,16 @@ CONDITIONS = {
 ORDER = list(CONDITIONS)
 
 STUDIES = [
+    {'id': 'final-study-001', 'dir': 'final-study-001', 'title': 'The main study (used in the paper)', 'kind': 'Real AI model', 'main': True,
+     'asked': 'In one consistent experiment with a real AI model: how much do short-lived IDs, rules, key-binding and automatic suspension each protect, and what do they cost?',
+     'means': ['Three parts in one run: the original design (tricks, thefts, revocation), goal-driven over-reach by the AI, and stolen-ID replay while the real AI does the legitimate work.',
+               'Numbers here are counted straight from the saved runs. Where a protection works by design (for example a stolen ID that must carry a key signature), the result checks the mechanism rather than testing a guess.'],
+     'not': ['One AI model on one computer with made-up company data; repeats of the same task are close to identical, so 30 runs is fewer independent trials than it sounds.',
+             'The thief is a script, and the approver is simulated.',
+             'Runs the clock monitor flagged are listed in the quality file of the study folder; replaced runs are not counted twice.']},
+    {'id': 'final-study-pilot-001', 'dir': 'final-study-pilot-001', 'title': 'Main study (pilot)', 'kind': 'Pilot',
+     'asked': 'A short practice run (2 runs per setup) of the main study, done to check the method before the real run.',
+     'means': ['Shows the experiment works end to end. Too few runs to say anything beyond that.'], 'not': ['Do not quote these as results; see the main study.']},
     {'id': 'study-002', 'dir': 'study-002', 'title': 'Original study', 'kind': 'Real AI model',
      'asked': 'Does a short-lived ID, and then full Zero Trust rules, stop an AI agent that was tricked or whose ID was stolen?',
      'means': ['Each extra layer (short-lived ID, rules, limits) was tested against the same set of tricks and thefts, using a real AI model that chose its own actions.',
@@ -79,13 +89,21 @@ GLOSSARY = [
 
 def _runs(folder):
     out = []
-    base = folder / 'runs'
-    if not base.is_dir(): return out
-    with os.scandir(base) as entries:
-        for entry in entries:
-            path = Path(entry.path) / 'summary.json'
-            try: out.append(json.loads(path.read_text(encoding='utf-8')))
-            except (OSError, ValueError): continue
+    bases = [folder / 'runs']
+    if (folder / 'final-manifest.json').is_file(): bases = [folder / n / 'runs' for n in ('part-a', 'part-b', 'part-c')]
+    for base in bases:
+        if not base.is_dir(): continue
+        with os.scandir(base) as entries:
+            for entry in entries:
+                path = Path(entry.path) / 'summary.json'
+                try: out.append(json.loads(path.read_text(encoding='utf-8')))
+                except (OSError, ValueError): continue
+    if (folder / 'final-manifest.json').is_file():
+        # A prespecified timing rerun replaces its flagged original; infrastructure originals are non-completed anyway.
+        replaced = {r['timing_rerun_of'] for r in out if r.get('timing_rerun_of') and r.get('status') == 'completed'}
+        out = [r for r in out if r.get('run_id') not in replaced]
+        for r in out:
+            if r.get('cell_id') and not r.get('scenario'): r['scenario'] = 'Stolen-ID replay with real AI (Part C)'
     return out
 
 
@@ -101,8 +119,10 @@ def _condition_row(key, runs):
     n = len(runs)
     bound = key in ('C3', 'C3-AS') or any('first_attacker_success' in r for r in runs)
     row = {'key': key, 'name': CONDITIONS.get(key, (key, ''))[0], 'tip': CONDITIONS.get(key, (key, ''))[1], 'runs': n}
-    if any('first_attacker_success' in r for r in runs):
+    if runs and all('first_attacker_success' in r for r in runs):
         row['bad'] = sum(bool(r.get('first_attacker_success')) for r in runs); row['bad_label'] = 'runs where the thief got in'
+    elif any('first_attacker_success' in r for r in runs):
+        row['bad'] = sum(bool(r.get('unauthorized_outcome') or r.get('first_attacker_success')) for r in runs); row['bad_label'] = 'runs with an unauthorized effect or a thief getting in'
     else:
         row['bad'] = sum(bool(r.get('unauthorized_outcome')) for r in runs); row['bad_label'] = 'runs with an unauthorized effect'
     row['task_done'] = sum(r.get('task_outcome') == 'completed' or bool(r.get('legit_task_completed')) for r in runs)
@@ -158,7 +178,7 @@ def _takeaway(spec, rows, total):
         lock = by.get('C2-AS', {})
         extra = (' Auto-suspend stopped the thief but locked the real agent out in %d of %d runs.' % (lock['locked_out'], lock['locked_n'])) if 'locked_out' in lock else ''
         return '; '.join(parts) + '.' + extra
-    keys = [k for k in ('C0', 'C1', 'C2') if k in by]
+    keys = [k for k in (('C0', 'C1', 'C2', 'C2-AS', 'C3', 'C3-AS') if spec['id'].startswith('final-study') else ('C0', 'C1', 'C2')) if k in by]
     return 'Runs ending with an unauthorized effect: ' + '; '.join('%s %s' % (by[k]['name'], fmt(k)) for k in keys) + '.'
 
 
@@ -166,11 +186,11 @@ def study_summary(spec, results=None):
     folder = (results or ROOT / 'results') / spec['dir']
     if not folder.is_dir(): return {'id': spec['id'], 'title': spec['title'], 'present': False, 'badges': [], 'asked': spec['asked'], 'takeaway': 'Not run yet.'}
     all_runs = _runs(folder); runs = [r for r in all_runs if r.get('status') == 'completed' and not r.get('positive_control')]
-    manifest = _read_json(folder / 'manifest.json'); status = _read_json(folder / 'batch-status.json') or {}
+    manifest = _read_json(folder / 'manifest.json') or _read_json(folder / 'final-manifest.json'); status = _read_json(folder / 'batch-status.json') or {}
     groups = {}
     for r in runs: groups.setdefault(r.get('condition'), []).append(r)
     rows = [_condition_row(k, groups[k]) for k in ORDER if k in groups]
-    planned = status.get('planned') or (manifest or {}).get('count') or len(all_runs)
+    planned = status.get('planned') or (manifest or {}).get('count') or (manifest or {}).get('total') or len(all_runs)
     return {'id': spec['id'], 'title': spec['title'], 'present': True, 'asked': spec['asked'], 'badges': _badge(spec, all_runs, manifest, folder),
             'runs_counted': len(runs), 'runs_total': len(all_runs), 'planned': planned, 'takeaway': _takeaway(spec, rows, len(runs)),
             'conditions': rows, 'scenarios': _scenarios(runs), 'means': spec['means'], 'not': spec['not'],
@@ -195,7 +215,8 @@ def get_study(study_id, results=None, ttl=20):
 
 def overview(results=None):
     studies = [get_study(s['id'], results) for s in STUDIES]
-    studies = [s for s in studies if s['present'] or s['id'] == 'binding-study-001']
+    studies = [s for s in studies if s['present'] or s['id'] in ('binding-study-001', 'final-study-001')]
+    if any(s['id'] == 'final-study-001' and s['present'] for s in studies): studies = [s for s in studies if s['id'] != 'final-study-pilot-001']
     if any(s['id'] == 'binding-study-001' and s['present'] for s in studies): studies = [s for s in studies if s['id'] != 'binding-study-pilot-001']
     return {'intro': 'We tested whether "Zero Trust" protections keep an AI agent safe when its identity is stolen or when it is tricked into doing harm. The agent works inside a safe, fake company with made-up customers, files and payments.',
-            'studies': [{k: s.get(k) for k in ('id', 'title', 'present', 'badges', 'asked', 'takeaway', 'runs_counted', 'planned')} for s in studies]}
+            'studies': [{**{k: s.get(k) for k in ('id', 'title', 'present', 'badges', 'asked', 'takeaway', 'runs_counted', 'planned')}, 'main': s['id'] == 'final-study-001'} for s in studies]}
