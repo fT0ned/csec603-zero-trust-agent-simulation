@@ -1,3 +1,9 @@
+# Binding-response follow-up (C3, C2-AS, C3-AS) and easy dashboard
+
+New conditions behind new names only (C0, C1, C2, C2-noWF, C2-RS unchanged): C3 DPoP-style sender-constrained credential (testbed/binding.py), C2-AS/C3-AS detect-and-suspend on origin mismatch with audit fields response_action/trigger/detection_to_containment_ms. Separate scripted (no LLM, no spend) study binding-response-study-v1: pilot results/binding-study-pilot-001 (10/10) and full results/binding-study-001 (150/150, 30 per condition, 0 failures, 0 reruns), frozen beforehand in configs/binding-study-freeze.json. Mechanism verification only: stolen bearer token executed 30/30 in C1 and C2 (about 272 s until expiry; C2 leaked 5 in-scope records per run, blocked the attacker email), 0/30 in C2-AS, C3 and C3-AS; auto-suspend contained in median 2.3-2.6 ms but locked the legitimate agent out 30/30 (availability cost). See docs/binding-study-protocol.md and docs/binding-study-findings.md. Containers were rebuilt (docker compose build/up) and all 11 services healthy. New plain-user dashboard: Start-Dashboard.bat / python -m easyboard (docs/easy-dashboard.md). Existing results untouched.
+
+---
+
 # Completed separate real LLM authorization study
 
 The separate `agent-authorization-study-001` completed720/720 planned runs with no failures/reruns under pushed `agent-authorization-freeze-v1` (67f19b5e). Frozen analysis and independent cross-checks passed; all10 new A1-A3 contrasts supported. C0/C1 each committed150 unauthorized mutations; C2 committed0 and denied163 requests. noWF exported20 versus C2's10; RS committed30/30 unrequested payments versus C2's0/30. All300 authorized positive workflows completed, with0 false denials. Extra read attempts remain separately reported. Original hypotheses/nulls/quality vetoes unchanged.
