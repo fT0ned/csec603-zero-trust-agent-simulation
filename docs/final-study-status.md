@@ -6,10 +6,10 @@ Updated at each milestone. Protocol: `docs/final-study-protocol.md`. Orchestrato
 - [x] Orchestrator, configs, tests (commit "Add final-study orchestrator ...").
 - [x] UTF-8 container request fix (first pilot attempt failed on an em dash; attempt discarded).
 - [x] Protocol doc written before data.
-- [ ] Pilot `results/final-study-pilot-001` (running) and `docs/final-study-pilot-review.md`.
-- [ ] Analyzer `analysis/final_study.py` finished on pilot data.
-- [ ] Freeze file `configs/final-study-freeze.json`, tag `final-study-freeze-v1`, push.
-- [ ] Full collection `results/final-study-001`.
+- [x] Pilot `results/final-study-pilot-001` 134/134, `docs/final-study-pilot-review.md` (commit 67e2d0c3).
+- [x] Analyzer `analysis/final_study.py` verified on pilot data.
+- [x] Freeze `configs/final-study-freeze.json`, annotated tag `final-study-freeze-v1`, pushed (commit fedd511b).
+- [~] Full collection `results/final-study-001` STARTED (3,090 runs). Stage 1: Parts B+C (4+8 workers); stage 2: Part A (32 workers). Collector PID 44540 (launcher 43660). Log `.runtime/final-001.log`.
 - [ ] Timing reruns (if any), quality.json, analysis, findings, paper tables, easyboard, README/progress.
 
 ## How to resume
