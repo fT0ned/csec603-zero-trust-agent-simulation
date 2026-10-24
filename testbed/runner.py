@@ -31,7 +31,7 @@ def config_fingerprint(config):
 
 def container_request(container, data):
     proc=subprocess.run(['docker','compose','exec','-T',container,'python','-m','testbed.client'],
-        input=canonical(data),text=True,capture_output=True,cwd=ROOT,timeout=60)
+        input=canonical(data),text=True,encoding='utf-8',capture_output=True,cwd=ROOT,timeout=60)
     if proc.returncode: raise RuntimeError('Container request failed: '+proc.stderr[-1000:])
     try: result=json.loads(proc.stdout)
     except ValueError: raise RuntimeError('Container returned invalid response')
@@ -279,7 +279,7 @@ def run_one(cell, config, batch):
             process=None
             if not expected_denied:
                 process=subprocess.Popen(['docker','compose','exec','-T','attacker','python','-m','testbed.client'],
-                       cwd=ROOT,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+                       cwd=ROOT,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,encoding='utf-8')
                 process.stdin.write(canonical(stream_request));process.stdin.close()
             for line in (process.stdout if process is not None else []):
                 observed=json.loads(line)

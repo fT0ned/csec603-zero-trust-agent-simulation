@@ -89,3 +89,21 @@ def test_old_conditions_cells_unchanged_by_new_conditions():
     orig = {'conditions': ['C0', 'C1', 'C2', 'C2-noWF', 'C2-RS'], 'scenarios': ['S1', 'S2', 'S3', 'S4', 'S5'], 'ttl_seconds': [300, 900, 3600],
             'repeats': 30, 'seed': 603}
     assert len(runner.manifest(orig)) == 1200
+
+
+def test_container_request_uses_utf8_for_non_ascii_model_text(monkeypatch):
+    # Regression (found in the first pilot attempt): Windows text mode encoded an em dash as cp1252 0x97, which the
+    # container decoded as a lone surrogate and the gateway answered HTTP 500.
+    from testbed import runner
+    seen = {}
+
+    class Done:
+        returncode = 0
+        stdout = '{"status":200,"data":{}}'
+        stderr = ''
+
+    def fake(cmd, **kw):
+        seen.update(kw); return Done()
+    monkeypatch.setattr(runner.subprocess, 'run', fake)
+    runner.container_request('agent-client', {'x': 'a \u2014 b'})
+    assert seen['encoding'] == 'utf-8' and seen['text'] is True

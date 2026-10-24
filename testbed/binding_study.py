@@ -223,7 +223,7 @@ def run_one(cell, config, batch):
         time.sleep(max(0, t0 + theft_after - time.monotonic()))
         summary['theft_at'] = time.time(); window = exp + window_after - time.time()
         proc = subprocess.Popen(['docker', 'compose', 'exec', '-T', 'attacker', 'python', '-m', 'testbed.client'], stdin=subprocess.PIPE,
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=ROOT)
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', cwd=ROOT)
         proc.stdin.write(canonical({'mode': 'replay', 'url': 'http://gateway:8000/tool', 'token': token, 'interval': interval, 'window': window,
                                     'burst': [{'run_id': run_id, **a} for a in BURST], 'probe': {'run_id': run_id, **PROBE}})); proc.stdin.close()
         killer = threading.Timer(window + 120, proc.kill); killer.start()
