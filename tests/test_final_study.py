@@ -120,3 +120,27 @@ def test_combined_analysis_runs_on_pilot_collection(tmp_path):
     assert (tmp_path / 'analysis' / 'comparative-analysis.md').exists()
     again = final_study.analyse(pilot, tmp_path / 'analysis2', 100)
     assert (tmp_path / 'analysis' / 'h-verdicts.csv').read_text() == (tmp_path / 'analysis2' / 'h-verdicts.csv').read_text()
+
+
+def test_clock_monitor_writes_durably(tmp_path):
+    import time
+    path = tmp_path / 'clock.jsonl'
+    with fs.ClockMonitor(path):
+        time.sleep(1.3)
+    lines = path.read_text().splitlines()
+    assert len(lines) >= 2 and 'wall_time' in json.loads(lines[0])
+
+
+def test_resume_and_infrastructure_rerun_selection(tmp_path):
+    cells = fs.expected_counts(PILOT)['C']
+    d = tmp_path / 'part-c' / 'runs'
+    def put(name, cell, status, **extra):
+        (d / name).mkdir(parents=True)
+        (d / name / 'summary.json').write_text(json.dumps({**cell, 'run_id': name, 'status': status, **extra}))
+    put('r1', cells[0], 'completed'); put('r2', cells[1], 'infrastructure_failure'); put('r3', cells[2], 'running')
+    pending = {c['cell_id'] for c in fs.pending_cells('C', cells, tmp_path)}
+    assert cells[0]['cell_id'] not in pending and cells[1]['cell_id'] in pending and cells[2]['cell_id'] in pending and len(pending) == len(cells) - 1
+    redo = fs.infra_reruns('C', cells, tmp_path)
+    assert {r['cell_id'] for r in redo} == {cells[1]['cell_id'], cells[2]['cell_id']} and all(r['rerun_of'] for r in redo)
+    put('r4', cells[1], 'completed', rerun_of='r2')
+    assert cells[1]['cell_id'] not in {r['cell_id'] for r in fs.infra_reruns('C', cells, tmp_path)}

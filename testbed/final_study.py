@@ -124,13 +124,15 @@ def read_summaries(directory):
 class ClockMonitor:
     """Sample wall vs monotonic clock every second (host)."""
 
-    def __init__(self): self.samples = []; self._stop = threading.Event(); self._thread = None
+    def __init__(self, path=None): self.samples = []; self._stop = threading.Event(); self._thread = None; self.path = path
 
     def __enter__(self):
         def loop():
             while True:
                 a = time.monotonic(); wall = time.time(); b = time.monotonic()
-                self.samples.append({'wall_time': wall, 'monotonic_low': a, 'monotonic_high': b})
+                sample = {'wall_time': wall, 'monotonic_low': a, 'monotonic_high': b}; self.samples.append(sample)
+                if self.path:  # durable: an interrupted collection keeps its clock evidence
+                    with open(self.path, 'a', encoding='utf-8') as stream: stream.write(canonical(sample) + chr(10))
                 if self._stop.wait(1): return
         self._thread = threading.Thread(target=loop, daemon=True); self._thread.start(); return self
 
@@ -218,7 +220,7 @@ def run_part_tasks(part, tasks, pcfg, output, progress, links):
 
 def pending_cells(part, cells, output):
     """Cells with no usable terminal run yet (resume support)."""
-    done = {uid(part, r) for r in read_summaries(Path(output) / PARTS[part]) if r.get('status') not in INFRA[part] and 'rerun_of' not in r}
+    done = {uid(part, r) for r in read_summaries(Path(output) / PARTS[part]) if r.get('status') not in INFRA[part]}
     return [c for c in cells if uid(part, c) not in done]
 
 
@@ -264,7 +266,8 @@ def run_collection(config, output, resume=False):
             cells[part] = {'A': part_a.manifest, 'B': part_b.manifest, 'C': part_c.manifest}[part](pcfg)
     pcfgs = {p: part_config(config, p) for p in 'ABC'}
     progress = Progress(output, {p: len(cells[p]) for p in cells}); links = {'lock': threading.Lock()}
-    with ClockMonitor() as monitor, keep_awake():
+    name = 'clock-monitor.jsonl' if not (output / 'clock-monitor.jsonl').exists() else 'clock-monitor-resume-%d.jsonl' % int(time.time())
+    with ClockMonitor(output / name), keep_awake():
         for stage in stages:
             threads = []
             for part in stage:
@@ -275,8 +278,6 @@ def run_collection(config, output, resume=False):
                 redo = infra_reruns(part, cells[part], output)
                 for row in redo: (output / 'rerun-links.jsonl').open('a', encoding='utf-8').write(canonical({'part': part, 'uid': uid(part, row), 'rerun_of': row['rerun_of'], 'kind': 'infrastructure', 'at': time.time()}) + '\n')
                 run_part_tasks(part, redo, pcfgs[part], output, progress, links)
-    name = 'clock-monitor.jsonl' if not (output / 'clock-monitor.jsonl').exists() else 'clock-monitor-resume-%d.jsonl' % int(time.time())
-    monitor.write(output / name)
     return finalize_quality(output, cells)
 
 
@@ -326,11 +327,10 @@ def timing_reruns(config, output):
         keys = ('condition', 'scenario', 'ttl_seconds', 'revocation_mode', 'seed', 'pair_id') if part == 'A' else ('cell_id', 'condition', 'replicate', 'ttl_seconds', 'order')
         todo[part].append({**{k: original[k] for k in keys}, 'timing_rerun_of': f['run_id']})
     links = {'lock': threading.Lock()}; progress = Progress(output, {p: len(todo[p]) for p in todo})
-    with ClockMonitor() as monitor, keep_awake():
+    with ClockMonitor(output / ('clock-monitor-timing-reruns-%d.jsonl' % int(time.time()))), keep_awake():
         threads = [threading.Thread(target=run_part_tasks, args=(p, todo[p], pcfgs[p], output, progress, links)) for p in 'ABC' if todo[p]]
         for t in threads: t.start()
         for t in threads: t.join()
-    monitor.write(output / ('clock-monitor-timing-reruns-%d.jsonl' % int(time.time())))
     for p in todo:
         for row in todo[p]:
             (output / 'rerun-links.jsonl').open('a', encoding='utf-8').write(canonical({'part': p, 'uid': uid(p, row), 'rerun_of': row['timing_rerun_of'], 'kind': 'timing', 'at': time.time()}) + '\n')
