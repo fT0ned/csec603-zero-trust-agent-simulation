@@ -11,6 +11,7 @@ import httpx
 import jwt
 from fastapi import FastAPI, HTTPException, Request
 from .common import canonical, digest, validate_action
+from .binding import verify_proof
 
 ROLE = os.getenv('SERVICE_ROLE', 'gateway')
 ADMIN = os.getenv('ADMIN_SECRET', '')
@@ -20,6 +21,9 @@ STATE = Path(os.getenv('STATE_DIR', '/state'))
 RUNS = {}
 LOCKS = {}
 DENY_IDS = set()
+BOUND = ('C3', 'C3-AS')
+AUTO = ('C2-AS', 'C3-AS')
+def c2f(condition): return condition.startswith(('C2', 'C3'))
 HTTP = httpx.AsyncClient(timeout=30, trust_env=False)
 app = FastAPI(title='Testbed ' + ROLE)
 
@@ -139,6 +143,9 @@ async def authenticate(request: Request):
             if claims['sub'] != state['spiffe_id']: raise ValueError('Subject mismatch')
         except Exception:
             return {'valid': False, 'reason': 'invalid or expired JWT-SVID'}
+    if state['condition'] in BOUND:
+        ok, why = verify_proof(data.get('dpop', ''), token, state.get('binding_jkt', ''), data.get('htm', ''), data.get('htu', ''), state.setdefault('dpop_seen', {}))
+        if not ok: return {'valid': False, 'reason': why}
     return {'valid': True, 'reason': 'valid', 'credential_id': state['credential_id']}
 
 @app.post('/tool')
@@ -148,7 +155,8 @@ async def tool(request: Request):
     try: validate_action(data.get('action'), data.get('params'))
     except ValueError as e: raise HTTPException(422, str(e))
     token = request.headers.get('authorization', '').removeprefix('Bearer ')
-    auth = {'valid':False,'reason':'revoked'} if digest(token) in DENY_IDS else await remote('/control/validate', {'run_id': data.get('run_id'), 'token': token})
+    auth = {'valid':False,'reason':'revoked'} if digest(token) in DENY_IDS else await remote('/control/validate', {'run_id': data.get('run_id'), 'token': token,
+        'dpop': request.headers.get('dpop', ''), 'htm': request.method, 'htu': str(request.url)})
     # Origin is the socket peer, never any caller-supplied header/body metadata.
     data['origin'] = request.client.host
     data['credential_valid'] = auth['valid']; data['credential_reason'] = auth['reason']
@@ -170,7 +178,7 @@ async def execute(run_id: str, request: Request):
             if data.get('credential_valid') and not state['revoked'] and not state['suspended']:
                 receipt_started=time.perf_counter();receipt_allowed=True;receipt_reason='idempotent response; no new effect'
                 receipt_input=None;receipt_policy=None;receipt_error=False
-                if state['condition'].startswith('C2'):
+                if c2f(state['condition']):
                     receipt_input={'condition':state['condition'],'action':data['action'],'params':data['params'],
                         'operation':'receipt','delegation':copy.deepcopy(state['delegation']),'workflow':dict(state['workflow']),
                         'identity_valid':True,'suspended':state['suspended']}
@@ -182,7 +190,7 @@ async def execute(run_id: str, request: Request):
                         receipt_allowed=False;receipt_error=True;receipt_reason='policy_engine_unavailable'
                 row={k:v for k,v in result['audit'].items() if k not in ['hash','previous_hash','sequence']}
                 row.update(time=time.time(),result='duplicate' if receipt_allowed else 'infrastructure_error' if receipt_error else 'denied')
-                if state['condition'].startswith('C2'):
+                if c2f(state['condition']):
                     row.update(origin=data['origin'],policy_decision=receipt_allowed,policy_reason=receipt_reason,
                         policy_input=receipt_input,policy_result=receipt_policy,workflow=dict(state['workflow']),jit_grant=None)
                 append_record(run_id,state,row)
@@ -198,7 +206,7 @@ async def execute(run_id: str, request: Request):
         if state['revoked']: reason = 'revoked'
         elif state['suspended']: reason = 'suspended'
         policy_input = None; policy_result = None; policy_error=False;jit_evidence=None
-        if allow and state['condition'].startswith('C2'):
+        if allow and c2f(state['condition']):
             policy_input = {'condition':state['condition'],'action':data['action'],'params':data['params'],
                             'delegation':copy.deepcopy(state['delegation']),'workflow':dict(state['workflow']),
                             'identity_valid':True,'suspended':state['suspended']}
@@ -263,7 +271,7 @@ async def execute(run_id: str, request: Request):
         row={'sequence':state['audit_count']+1,'request_id':request_id,'time':time.time(),
              'credential_id':state['credential_id'],'action':data['action'],'result':outcome}
         if state['condition']!='C0': row['agent']=state['spiffe_id']
-        if state['condition'].startswith('C2'):
+        if c2f(state['condition']):
             row.update({'params':data['params'],'origin':data['origin'],'expected_origin':state.get('expected_origin'),
                 'principal':state['delegation']['principal'],'delegation_chain':state['delegation']['chain'],
                 'task_id':run_id,'issuance':state.get('issuance',{}),'input_provenance':[x['request_id'] for x in state['provenance']],
