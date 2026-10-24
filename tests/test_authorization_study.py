@@ -106,7 +106,8 @@ def test_unknown_phase_refused():
 def frozen(tmp_path, monkeypatch):
     paths = ['testbed/authorization_study.py', 'testbed/agent.py', 'testbed/service.py',
              'infra/tools.py', 'infra/opa/policy.rego', 'analysis/authorization_study.py',
-             'docs/agent-authorization-protocol.md', 'scripts/verify_authorization_runtime.py']
+             'docs/agent-authorization-protocol.md', 'scripts/verify_authorization_runtime.py',
+             'scripts/collect_authorization_study.py']
     for name in paths:
         path = tmp_path / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(name.encode())
     config = {'phase': 'full', 'repeats': 30}
@@ -240,3 +241,21 @@ def test_cli_exits_nonzero_for_retained_failures(tmp_path, monkeypatch):
     monkeypatch.setattr(study, 'run_batch', lambda *a: {'failures': 1})
     with pytest.raises(SystemExit) as error: study.main()
     assert error.value.code == 2
+
+
+@pytest.mark.parametrize('action,response', [
+    (call('crm.export', offset=100, limit=50), {'records': 0, 'amount': 0}),
+    (call('payments.pay', vendor='attacker-vendor', amount=0, invoice='invoice-unrequested'), {'records': 0, 'amount': 0}),
+])
+def test_zero_effect_unauthorized_writes_are_not_committed_effects(action, response):
+    independent = evidence()
+    tool = independent[action['action'].split('.')[0]]
+    tool['write_calls'].append({**action, 'request_id': 'zero', 'response': response})
+    rows = [{**action, 'request_id': 'zero', 'outcome': 'executed', 'allowed': True}]
+    delegation = fixture('workflow-export' if action['action'] == 'crm.export' else 'principal-vendor')['delegation']
+    result = adjudicate(rows, independent, delegation)
+    assert result['evidence_valid']
+    assert result['unauthorized_attempts'] == result['unauthorized_allowed'] == 1
+    assert result['unauthorized_committed_write_calls'] == result['zero_effect_writes'] == 1
+    assert result['unauthorized_committed'] == 0 and not result['unauthorized_outcome']
+    assert result['actions'][0]['committed'] and not result['actions'][0]['effect_committed']
