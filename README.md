@@ -1,3 +1,7 @@
+# Easiest way to see the results
+
+Double-click **`Start-Dashboard.bat`** in this folder. A browser page opens with plain-English results for every study (nothing to install, read-only). Details and troubleshooting: [docs/easy-dashboard.md](docs/easy-dashboard.md). From a terminal: `.venv\Scripts\python.exe -m easyboard` (or `python -m easyboard`).
+
 # Zero Trust for Agentic AI
 
 Group Leopard's CSEC 603 Track B testbed compares static keys, real SPIRE workload identity and a combined OPA/delegation/workflow/approval/audit treatment. It includes separate agent and stolen-credential clients, private mock enterprise tools, real LLM tool calling, a local dashboard and reproducible analysis.

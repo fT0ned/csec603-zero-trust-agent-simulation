@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zero Trust Results Dashboard</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#111827;--muted:#4b5563;--line:#d1d5db;--accent:#1d4ed8;--good:#0b6b3a;--goodbg:#d9f2e3;--bad:#9b1c1c;--badbg:#fde0e0;--warn:#7a4b00;--warnbg:#fdecc8;--info:#1e3a8a;--infobg:#dbe6fd}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#1a1d24;--ink:#f3f4f6;--muted:#b6bcc8;--line:#3b4150;--accent:#8ab4ff;--good:#7be0a6;--goodbg:#12331f;--bad:#ffb3b3;--badbg:#401818;--warn:#ffd88a;--warnbg:#3a2a08;--info:#b6ccff;--infobg:#172a55}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:20px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{background:var(--card);border-bottom:2px solid var(--line);padding:14px 24px;display:flex;flex-wrap:wrap;gap:12px 28px;align-items:center}
+header h1{font-size:1.15rem;margin:0}
+nav a{color:var(--accent);font-weight:700;margin-right:20px;text-decoration:none;border-bottom:3px solid transparent;padding-bottom:2px}
+nav a:hover,nav a:focus{border-bottom-color:var(--accent)}
+main{max-width:1100px;margin:0 auto;padding:24px 20px 80px}
+h2{font-size:1.5rem;margin:1.2em 0 .4em}h3{font-size:1.15rem;margin:1.2em 0 .3em}
+.card{background:var(--card);border:2px solid var(--line);border-radius:14px;padding:20px 22px;margin:18px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:18px}
+.grid .card{margin:0;display:flex;flex-direction:column;gap:8px}
+.badge{display:inline-block;font-size:.8rem;font-weight:700;padding:3px 11px;border-radius:99px;margin:0 6px 4px 0}
+.badge.info{background:var(--infobg);color:var(--info)}.badge.warn{background:var(--warnbg);color:var(--warn)}.badge.bad{background:var(--badbg);color:var(--bad)}
+.big{font-size:1.1rem}.muted{color:var(--muted)}
+a.btn{display:inline-block;background:var(--accent);color:var(--bg);font-weight:700;padding:10px 18px;border-radius:10px;text-decoration:none;margin-top:6px;align-self:flex-start}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+th{background:var(--bg)}
+td.good{background:var(--goodbg);color:var(--good);font-weight:700}td.badc{background:var(--badbg);color:var(--bad);font-weight:700}td.neutral{background:var(--warnbg);color:var(--warn);font-weight:700}
+.scroll{overflow-x:auto}
+abbr{text-decoration:underline dotted;cursor:help}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+.box{border-left:8px solid var(--accent);background:var(--card);padding:14px 20px;border-radius:8px;border:2px solid var(--line);border-left-width:8px}
+.box.no{border-left-color:var(--bad)}.box.yes{border-left-color:var(--good)}
+svg{max-width:100%;height:auto;background:var(--card);border-radius:10px;border:2px solid var(--line)}
+svg text{fill:var(--ink);font-family:system-ui,sans-serif}
+dt{font-weight:700;margin-top:14px}dd{margin:2px 0 0}
+a{color:var(--accent)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+@media (max-width:600px){body{font-size:18px}main{padding:16px 12px 60px}}
+</style>
+</head>
+<body>
+<header><h1>Zero Trust Results Dashboard</h1>
+<nav aria-label="Main"><a href="#/">Home</a><a href="#/glossary">Glossary</a></nav>
+<span class="muted" style="font-size:.85rem">Read-only: this page only reads results, it never changes them.</span></header>
+<main id="app" tabindex="-1"><p>Loading...</p></main>
+<script>
+"use strict";
+const $=document.getElementById('app');
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const get=u=>fetch(u).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()});
+const badges=b=>(b||[]).map(x=>`<span class="badge ${x[1]}">${esc(x[0])}</span>`).join('');
+const pct=(k,n)=>n?Math.round(100*k/n):0;
+function fmtSeconds(v){return v==null?'n/a':v<1?v.toFixed(2)+' s':v<120?v.toFixed(0)+' s':(v/60).toFixed(1)+' min'}
+
+async function home(){
+  const o=await get('/api/overview');
+  $.innerHTML=`<h2>What we tested</h2><div class="card big"><p>${esc(o.intro)}</p>
+  <p>Each study below gives the same tasks and attacks to several protection setups and counts what went wrong. Click a study to see the tables, charts and what they do and do not prove.</p>
+  <p class="muted">Tip: hover over a setup name (like "Full Zero Trust") to see what it means. Unsure about a word? See the <a href="#/glossary">Glossary</a>.</p></div>
+  <h2>The studies</h2><div class="grid">`+o.studies.map(s=>`<article class="card">
+   <h3 style="margin:0">${esc(s.title)}</h3><div>${badges(s.badges)}</div>
+   <p class="muted" style="margin:0">${esc(s.asked)}</p>
+   ${s.present?`<p class="big" style="margin:4px 0"><strong>${esc(s.takeaway)}</strong></p><p class="muted" style="margin:0">${s.runs_counted} runs counted (of ${s.planned} planned)</p><a class="btn" href="#/study/${esc(s.id)}">Open this study</a>`:`<p class="big"><strong>${esc(s.takeaway)}</strong></p>`}
+  </article>`).join('')+`</div>`;
+}
+
+function tipName(r){return `<abbr title="${esc(r.tip)}">${esc(r.name)}</abbr> <span class="muted">(${esc(r.key)})</span>`}
+function barChart(title,items,unit,max,cap){
+  const w=760,rowh=44,h=60+rowh*items.length,top=max||Math.max(1,...items.map(i=>i.v));
+  let s=`<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(title)}"><text x="12" y="28" font-size="19" font-weight="700">${esc(title)}</text>`;
+  items.forEach((it,i)=>{const y=48+rowh*i,bw=Math.max(it.v>0?4:0,420*it.v/top);
+    s+=`<text x="12" y="${y+22}" font-size="16">${esc(it.label)}</text><rect x="250" y="${y}" width="${bw}" height="28" rx="4" fill="${it.bad?'#c0392b':'#1f9d55'}"/><text x="${256+bw}" y="${y+22}" font-size="16" font-weight="700">${esc(it.text)}</text>`});
+  return s+`</svg>${cap?`<p class="muted" style="font-size:.85rem">${esc(cap)}</p>`:''}`;
+}
+
+async function study(id){
+  const s=await get('/api/study/'+encodeURIComponent(id));
+  if(!s.present){$.innerHTML=`<h2>${esc(s.title)}</h2><div class="card">${esc(s.takeaway)}</div><a href="#/">Back</a>`;return}
+  const C=s.conditions, hasExp=C.some(r=>r.exposure_median!=null), hasLock=C.some(r=>r.locked_out!=null), hasCont=C.some(r=>r.containment_ms_median!=null);
+  let h=`<p><a href="#/">&larr; All studies</a></p><h2>${esc(s.title)}</h2><div>${badges(s.badges)}</div>
+  <div class="card big"><p><strong>The question:</strong> ${esc(s.asked)}</p><p><strong>Short answer from the data:</strong> ${esc(s.takeaway)}</p>
+  <p class="muted">${s.runs_counted} runs counted of ${s.planned} planned. ${esc(s.excluded_note)}</p></div>`;
+  h+=`<h3>Setups compared</h3><p class="muted">Green is good, red is bad. The first number column counts the bad outcomes (hover the column title).</p><div class="scroll"><table><thead><tr><th>Protection setup</th><th>Runs</th><th><abbr title="${esc(C[0].bad_label)}">Bad outcomes</abbr></th><th><abbr title="Share of runs where the intended job still got done">Job still done</abbr></th>`;
+  if(hasExp)h+=`<th><abbr title="How long (in the middle of the range) a stolen ID kept working. A plus sign means some runs were still working when we stopped watching.">Stolen ID kept working</abbr></th>`;
+  if(hasLock)h+=`<th><abbr title="Runs where the real agent was refused right after the attack, an availability cost of the protection.">Real agent locked out</abbr></th>`;
+  if(hasCont)h+=`<th><abbr title="Time from the first suspicious request until the stolen ID was blocked everywhere.">Time to contain</abbr></th>`;
+  h+=`</tr></thead><tbody>`;
+  C.forEach(r=>{const p=pct(r.bad,r.runs),cls=r.bad===0?'good':p>=50?'badc':'neutral';
+    h+=`<tr><td>${tipName(r)}</td><td>${r.runs}</td><td class="${cls}">${r.bad} of ${r.runs} (${p}%)</td><td>${pct(r.task_done,r.runs)}%</td>`;
+    if(hasExp)h+=r.exposure_median==null?'<td>n/a</td>':`<td class="${r.exposure_median<1?'good':'badc'}">${fmtSeconds(r.exposure_median)}${r.exposure_censored?'+ ('+r.exposure_censored+' still working at end)':''}</td>`;
+    if(hasLock)h+=r.locked_out==null?'<td>n/a</td>':`<td class="${r.locked_out===0?'good':'badc'}">${r.locked_out} of ${r.locked_n}</td>`;
+    if(hasCont)h+=r.containment_ms_median==null?'<td>n/a</td>':`<td class="good">${r.containment_ms_median.toFixed(1)} ms (n=${r.containment_n})</td>`;
+    h+='</tr>'});
+  h+=`</tbody></table></div><h3>Charts</h3>`;
+  h+=barChart('Runs with a bad outcome (%)',C.map(r=>({label:r.name,v:pct(r.bad,r.runs),text:pct(r.bad,r.runs)+'% ('+r.bad+'/'+r.runs+')',bad:r.bad>0})),'%',100,'Shorter bars are better.');
+  if(hasExp)h+='<br><br>'+barChart('How long a stolen ID kept working (seconds, middle of range)',C.filter(r=>r.exposure_median!=null).map(r=>({label:r.name,v:r.exposure_median,text:fmtSeconds(r.exposure_median)+(r.exposure_censored?'+':''),bad:r.exposure_median>=1})),'s',null,'Shorter bars are better. A plus sign means the ID was still working when observation ended, so the true time is at least this long.');
+  if(hasLock)h+='<br><br>'+barChart('Real agent locked out right after the attack (%)',C.filter(r=>r.locked_out!=null).map(r=>({label:r.name,v:pct(r.locked_out,r.locked_n),text:pct(r.locked_out,r.locked_n)+'%',bad:r.locked_out>0})),'%',100,'This is the price of automatic suspension: the thief is stopped, but the real agent is stopped too.');
+  const sc=Object.keys(s.scenarios||{});
+  if(sc.length){const keys=C.map(r=>r.key);h+=`<h3>Breakdown by situation (bad outcomes / runs)</h3><div class="scroll"><table><thead><tr><th>Situation</th>${keys.map(k=>`<th>${esc(k)}</th>`).join('')}</tr></thead><tbody>`;
+    sc.sort().forEach(n=>{h+=`<tr><td>${esc(n)}</td>`+keys.map(k=>{const c=s.scenarios[n][k];return c?`<td class="${c[0]===0?'good':c[0]===c[1]?'badc':'neutral'}">${c[0]}/${c[1]}</td>`:'<td>-</td>'}).join('')+'</tr>'});h+='</tbody></table></div>'}
+  h+=`<div class="two" style="margin-top:24px"><div class="box yes"><h3 style="margin-top:0">What this means</h3><ul>${s.means.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>
+  <div class="box no"><h3 style="margin-top:0">What this does NOT prove</h3><ul>${s.not.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div></div>`;
+  $.innerHTML=h;
+}
+
+async function glossary(){
+  const g=await get('/api/glossary');
+  $.innerHTML=`<h2>Glossary</h2><p class="muted">Plain-English meanings of the words used here.</p><dl class="card">`+g.map(x=>`<dt>${esc(x.term)}</dt><dd>${esc(x.meaning)}</dd>`).join('')+`</dl>`;
+}
+
+async function route(){
+  const h=location.hash||'#/';
+  try{
+    if(h.startsWith('#/study/'))await study(decodeURIComponent(h.slice(8)));
+    else if(h==='#/glossary')await glossary();
+    else await home();
+  }catch(e){$.innerHTML=`<div class="card"><strong>Could not load this page.</strong><p class="muted">${esc(e.message)}. Make sure the black window that opened with the dashboard is still open.</p></div>`}
+  window.scrollTo(0,0);
+}
+window.addEventListener('hashchange',route);route();
+</script>
+</body>
+</html>
