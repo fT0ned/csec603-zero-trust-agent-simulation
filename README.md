@@ -22,3 +22,8 @@ See [analysis rules](docs/analysis-plan.md), [paper artifact mappings](docs/pape
 
 
 The separate [enforcement extension](docs/enforcement-extension-protocol.md) uses one neutral system prompt across C0/C1/C2 and unchanged actual controls. Its36-unit real-LLM exploratory pilot completed and again recorded no harmful attempts; [exact transcript findings](docs/neutral-pilot-findings.md) preserve this negative result. The separately tagged390-unit scripted stress collection completed and passed its validation: C0 and C1 each committed120/120 harmful requests, while C2 committed0/120. [Measured enforcement findings](docs/enforcement-stress-findings.md) explain the payload-specific scope, workflow and approval effects, uncertainty and limitations. The [completed conditional timing sensitivity](docs/timing-sensitivity-findings.md) preserves the original veto and all failed attempts. [Positive controls](docs/authorized-action-controls.md) verify that exact payload actions execute when explicitly authorized.
+
+
+## Main study (used in the paper)
+
+`results/final-study-001` (protocol `docs/final-study-protocol.md`, findings `docs/final-study-findings.md`). Reproduce: `python -m scripts.collect_final_study run --config configs/final-study.json --output results/NEW`, then `python -m analysis.final_study --input results/NEW --output results/NEW/analysis` and `python -m analysis.final_study_report --input results/NEW --analysis results/NEW/analysis`. View with `Start-Dashboard.bat`.

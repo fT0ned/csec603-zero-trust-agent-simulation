@@ -25,3 +25,6 @@ Ledger before this work: USD 0.7686 of a 4.00 cap (STUDY_BUDGET_USD=4). No chang
 
 ## Part A infrastructure failures observed during collection (checked read-only)
 At 776/2100 Part A units, 4 units were `infrastructure_failure`, all C0/C1 S4 (not systematic by condition/TTL: C0 300 now, C0 300 expiry, C0 900 expiry, C1 3600 now). Causes: (1) one PA `/control/runs` HTTP 500 (transient tool-reset connection error, 19:38); (2) two `docker compose exec` CLI crashes (Go runtime stack traces from the Docker CLI, 20:28, host load) in container_request / tool-evidence snapshot; (3) one `tool_failure` probe measurement error (20:35). All containers healthy. These are covered by the frozen rule (one linked infrastructure rerun per cell, originals kept); the orchestrator performs them automatically at the end of stage 2. No code change made. Risk: more Docker CLI crashes under 32-way load; if remaining failures after reruns are nonzero they are reported as such, never hidden.
+
+## COMPLETE
+Collection finished: 3,090/3,090 completed (A 2,100 incl. 9 infrastructure reruns, B 840, C 150), no clock steps, no timing reruns, analysis + paper package written, easyboard updated. Ledger 1.69/4.00 USD.

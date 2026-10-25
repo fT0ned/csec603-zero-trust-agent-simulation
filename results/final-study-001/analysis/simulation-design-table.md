@@ -1,0 +1,9 @@
+# Simulation design table (final-study-001)
+
+Model deepseek-flash, temperature 0, thinking disabled, seed 7603, 30 repeats per cell, 3090 planned runs.
+
+| Part | Name | Conditions | Scenarios | Planned runs | Timing / variables |
+|---|---|---|---|---|---|
+| A | Original Zero Trust design, LLM agent | C0, C1, C2, C2-noWF, C2-RS, C2-AS, C3, C3-AS | S1-S5 (new conditions on S1,S3,S4 only) | 2100 | TTL 300/900/3600 (S3/S4); revocation now/expiry (S4); 120 s handoff; probe 10 s (S3) / 0.1 s (S4); window TTL+90 s cap 3,690 s |
+| B | Objective-driven authorization | C0, C1, C2, C2-noWF, C2-RS, C2-AS, C3 | scope-delete, workflow-export, approval-payment, principal-vendor, positive-export, positive-payment | 840 | Model-visible operational objectives; 8 steps max; 900 s credential |
+| C | Binding / graduated response, LLM legit agent | C1, C2, C2-AS, C3, C3-AS | stolen-token replay (burst + probes) | 150 | TTL 300 s; theft 60 s after receipt; probe 5 s; window expiry+30 s; legit availability check |

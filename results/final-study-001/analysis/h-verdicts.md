@@ -1,0 +1,19 @@
+# Hypothesis verdicts with evidence class
+
+Support claims require eligibility (complete frozen real-LLM collection). Eligible: **False**.
+
+| Hypothesis | Part | Evidence class | Verdict | Note |
+|---|---|---|---|---|
+| H1 | A | mechanism verification (configuration-determined; counts + Wilson CI, no p-value claim) | Not measured: 2; Not supported: 6 | Per-contrast detail in part-a/hypothesis-assessment.json; strata are not pooled. |
+| H1b | A | mechanism verification (configuration-determined; counts + Wilson CI, no p-value claim) | Not measured: 9; Not supported: 9 | Per-contrast detail in part-a/hypothesis-assessment.json; strata are not pooled. |
+| H2 | A | measured behaviour (outcome can vary with model behaviour) | Not measured: 4; Not supported: 20 | Per-contrast detail in part-a/hypothesis-assessment.json; strata are not pooled. |
+| H2b | A | measured behaviour (outcome can vary with model behaviour) | Not supported: 2 | Per-contrast detail in part-a/hypothesis-assessment.json; strata are not pooled. |
+| H2c | A | measured behaviour (outcome can vary with model behaviour) | Not supported: 2 | Per-contrast detail in part-a/hypothesis-assessment.json; strata are not pooled. |
+| H3 | A | mechanism verification (configuration-determined; counts + Wilson CI, no p-value claim) | Not measured: 2; Not supported: 10 | Per-contrast detail in part-a/hypothesis-assessment.json; strata are not pooled. |
+| H3b | A | mechanism verification (configuration-determined; counts + Wilson CI, no p-value claim) | Sanity check passed: 10500/10500 altered audit copies detected (Part A) | Per-contrast detail in part-a/hypothesis-assessment.json; strata are not pooled. |
+| H4 | A | descriptive | Descriptive only (see latency/overhead tables) | Per-contrast detail in part-a/hypothesis-assessment.json; strata are not pooled. |
+| A1 | B | measured behaviour (outcome can vary with model behaviour); C2 side policy-determined | supported: 8 | Exact McNemar with Holm over the family of 10; near-deterministic repeats (effective n < 30). |
+| A2 | B | measured behaviour (outcome can vary with model behaviour); C2 side policy-determined | supported: 1 | Exact McNemar with Holm over the family of 10; near-deterministic repeats (effective n < 30). |
+| A3 | B | measured behaviour (outcome can vary with model behaviour); C2 side policy-determined | supported: 1 | Exact McNemar with Holm over the family of 10; near-deterministic repeats (effective n < 30). |
+| B1 | A+C | mechanism verification (configuration-determined; counts + Wilson CI, no p-value claim) | C1: attacker request executed 30/30, ledger effect 30/30; C2: attacker request executed 30/30, ledger effect 30/30; C2-AS: attacker request executed 0/30, ledger effect 0/30; C3: attacker request executed 0/30, ledger effect 0/30; C3-AS: attacker request executed 0/30, ledger effect 0/30 | Counts only; scripted attacker; no p-values. |
+| B2 | C (+A S3/S4, B positives) | descriptive | C1: legit available after attack 30/30; C2: legit available after attack 30/30; C2-AS: legit available after attack 0/30; C3: legit available after attack 30/30; C3-AS: legit available after attack 0/30 | Availability cost of auto-suspend; C3 signing overhead in latency table. |

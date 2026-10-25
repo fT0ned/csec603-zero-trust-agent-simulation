@@ -1,3 +1,9 @@
+# Final study (the paper is written from this)
+
+`results/final-study-001`: one frozen (tag `final-study-freeze-v1`), real-LLM, three-part collection, 3,090/3,090 completed, 9 Part A infrastructure failures re-run once each, no clock steps, USD 0.855. See docs/final-study-protocol.md, docs/final-study-findings.md, analysis/paper-package.md. Earlier studies below are history and are not pooled.
+
+---
+
 # Binding-response follow-up (C3, C2-AS, C3-AS) and easy dashboard
 
 New conditions behind new names only (C0, C1, C2, C2-noWF, C2-RS unchanged): C3 DPoP-style sender-constrained credential (testbed/binding.py), C2-AS/C3-AS detect-and-suspend on origin mismatch with audit fields response_action/trigger/detection_to_containment_ms. Separate scripted (no LLM, no spend) study binding-response-study-v1: pilot results/binding-study-pilot-001 (10/10) and full results/binding-study-001 (150/150, 30 per condition, 0 failures, 0 reruns), frozen beforehand in configs/binding-study-freeze.json. Mechanism verification only: stolen bearer token executed 30/30 in C1 and C2 (about 272 s until expiry; C2 leaked 5 in-scope records per run, blocked the attacker email), 0/30 in C2-AS, C3 and C3-AS; auto-suspend contained in median 2.3-2.6 ms but locked the legitimate agent out 30/30 (availability cost). See docs/binding-study-protocol.md and docs/binding-study-findings.md. Containers were rebuilt (docker compose build/up) and all 11 services healthy. New plain-user dashboard: Start-Dashboard.bat / python -m easyboard (docs/easy-dashboard.md). Existing results untouched.

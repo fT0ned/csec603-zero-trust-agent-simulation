@@ -32,7 +32,9 @@ The ten artifact categories have repository source material. This does not mean 
 | One-use expiring JIT | Absent | Absent | Present | Present | Present |
 | Audit evidence | Typical minimal | Identity-aware | Full principal/action/provenance | Full | Full |
 | Scenarios | S1–S5 | S1–S5 | S1–S5 | S2/S5 | S2/S5 |
-| Measured outcome/overhead | Not measured here | Not measured here | Not measured here | Not measured here | Not measured here |
+| Measured outcome/overhead | Measured: see final-study-001 | Measured: see final-study-001 | Measured: see final-study-001 | Measured: see final-study-001 | Measured: see final-study-001 |
+
+Extended conditions (final-study-001): C2-AS = C2 plus detect-and-suspend on origin mismatch; C3 = C2 plus DPoP-style sender-constrained credential; C3-AS = both. Measured outcomes for all eight conditions are in `results/final-study-001/analysis/comparative-analysis.md` (S3 replay: harmful executed 90/90 C0, 90/90 C1, 0/90 for C2, C2-AS, C3, C3-AS; Part C stolen token executed 30/30 in C1/C2 and 0/30 in C2-AS/C3/C3-AS; auto-suspend locked out the legitimate agent 30/30). The paper is written from final-study-001 (`docs/final-study-findings.md`).
 
 Table I defines the comparison before results. C1–C0 primarily concerns finite bearer-credential lifetime; it does not isolate attestation from expiry or provide a different revocation mechanism. C2 is a combined package except for the two specified ablations.
 
