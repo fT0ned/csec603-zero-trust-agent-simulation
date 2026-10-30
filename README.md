@@ -27,3 +27,5 @@ The separate [enforcement extension](docs/enforcement-extension-protocol.md) use
 ## Main study (used in the paper)
 
 `results/final-study-001` (protocol `docs/final-study-protocol.md`, findings `docs/final-study-findings.md`). Reproduce: `python -m scripts.collect_final_study run --config configs/final-study.json --output results/NEW`, then `python -m analysis.final_study --input results/NEW --output results/NEW/analysis` and `python -m analysis.final_study_report --input results/NEW --analysis results/NEW/analysis`. View with `Start-Dashboard.bat`.
+
+Note: `analysis/h-verdicts.md` labels some hypotheses "Not supported" and shows "Eligible: False" only because an eligibility check requires a model ID on the scripted S3/S4 replay runs, which make no model call. The statistics and thresholds are met; see `analysis/paper-package.md` for the actual outcomes reported in the paper.
