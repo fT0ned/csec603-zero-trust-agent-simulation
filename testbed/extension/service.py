@@ -101,7 +101,7 @@ async def start(request: Request):
         raise HTTPException(422, 'unknown condition')
     state = copy.deepcopy(data)
     state.update(audit=[], provenance=[], counters={'records': 0, 'payment': 0, 'intents': {}}, suspended=False,
-                 revoked=set(), static=secrets.token_urlsafe(32), accountability='complete', cache={})
+                 revoked=set(), blocked_svid_digests=set(), static=secrets.token_urlsafe(32), accountability='complete', cache={})
     RUNS[run_id] = state
     LOCKS[run_id] = asyncio.Lock()
     for name, url in TOOLS.items():
@@ -150,10 +150,13 @@ async def internal_exchange(request: Request):
             if not ok:
                 raise ValueError(why)
         token = ISSUER.exchange(data['subject_token'], svid['sub'], data['scope'], data['budget'], data.get('next_actor', ''),
-                                jkt=jkt, enforce=state['condition'] not in ('C0-E', 'C1-E'))
+                                jkt=jkt, enforce=state['condition'] not in ('C0-E', 'C1-E'), actor_svid_digest=digest(data['actor_token']))
         claims = ISSUER.verify(token, enforce_chain=state['condition'] not in ('C0-E', 'C1-E'))
+        receipt = jwt.encode({'iss': 'csec603-extension-audit', 'aud': 'csec603-extension-audit-review', 'iat': int(time.time()),
+                              'claims': claims, 'token_digest': digest(token)}, ISSUER.key, algorithm='ES256',
+                             headers={'typ': 'csec603-audit+jwt'})
         append(state, {'kind': 'exchange', 'time': time.time(), 'actor': svid['sub'], 'claims': claims,
-                       'parent_digest': claims['parent'], 'token_digest': digest(token), 'origin': data['_peer']})
+                       'parent_digest': claims['parent'], 'token_digest': digest(token), 'origin': data['_peer'], 'signed_receipt': receipt})
         return {'ok': True, 'access_token': token, 'token_type': 'DPoP' if jkt else 'Bearer', 'claims': claims,
                 'exchange_ms': (time.perf_counter() - started) * 1000}
     except (jwt.PyJWTError, ValueError, TypeError, KeyError, StopIteration):
@@ -242,7 +245,9 @@ async def execute(request: Request):
             if isinstance(value, str) and len(value) >= 4:
                 for observed in state['provenance']:
                     if value in observed['text']:
-                        links.append({'parameter': parameter, 'source_request_id': observed['request_id'], 'content_hash': observed['content_hash']})
+                        prior_intent = any(call['params'].get(parameter) == value for call in state['delegation']['expected_calls'])
+                        links.append({'parameter': parameter, 'source_request_id': observed['request_id'], 'content_hash': observed['content_hash'],
+                                      'already_in_principal_intent': prior_intent})
         row = {'kind': 'action', 'time': time.time(), 'request_id': request_id, 'origin': data['_peer'], 'expected_origin': expected,
                'identity_valid': identity_valid, 'possession_valid': possession_valid, 'authority_valid': allowed_authority,
                'authority_reason': authority_reason, 'parameter_provenance': links, 'action': data['action'], 'params': data['params'],
@@ -257,8 +262,12 @@ async def execute(request: Request):
         if enforce and response in ('suspend_identity', 'contain_identity'):
             state['suspended'] = True
             state['revoked'].add(digest(token))
+            if claims.get('actor_svid_digest'):
+                state['blocked_svid_digests'].add(claims['actor_svid_digest'])
         if enforce and response == 'revoke_credential':
             state['revoked'].add(digest(token))
+            if claims.get('actor_svid_digest'):
+                state['blocked_svid_digests'].add(claims['actor_svid_digest'])
         allowed = possession_valid and not state['suspended'] and digest(token) not in state['revoked'] and (allowed_authority or not enforce)
         if enforce and state['accountability'] == 'tamper':
             allowed = False
@@ -273,17 +282,21 @@ async def execute(request: Request):
         elif allowed:
             url = TOOLS[data['action'].split('.')[0]]
             effect = await HTTP.post(url + '/execute', json={k: data[k] for k in ('run_id', 'request_id', 'action', 'params')})
-            effect.raise_for_status()
-            result = effect.json()
-            outcome = 'executed'
-            state['counters']['records'] += result.get('records', 0)
-            state['counters']['payment'] += result.get('amount', 0)
-            intent = canonical({'action': data['action'], 'params': data['params']})
-            state['counters']['intents'][intent] = state['counters']['intents'].get(intent, 0) + 1
-            state['cache'][request_id] = {'fingerprint': fingerprint, 'result': result}
-            if data['action'] in ('files.read', 'email.read', 'crm.read'):
-                text = canonical(result.get('result'))
-                state['provenance'].append({'text': text, 'content_hash': digest(text), 'request_id': request_id})
+            if 400 <= effect.status_code < 500:
+                result = {'error': 'synthetic_application_rejected_request', 'http_status': effect.status_code}
+                outcome = 'tool_error'
+            else:
+                effect.raise_for_status()
+                result = effect.json()
+                outcome = 'executed'
+                state['counters']['records'] += result.get('records', 0)
+                state['counters']['payment'] += result.get('amount', 0)
+                intent = canonical({'action': data['action'], 'params': data['params']})
+                state['counters']['intents'][intent] = state['counters']['intents'].get(intent, 0) + 1
+                state['cache'][request_id] = {'fingerprint': fingerprint, 'result': result}
+                if data['action'] in ('files.read', 'email.read', 'crm.read'):
+                    text = canonical(result.get('result'))
+                    state['provenance'].append({'text': text, 'content_hash': digest(text), 'request_id': request_id})
         row.update(response_action=response, outcome=outcome, suspended=state['suspended'],
                    credential_revoked=digest(token) in state['revoked'], reason=reason if not possession_valid else authority_reason,
                    counters=copy.deepcopy(state['counters']))
@@ -327,7 +340,9 @@ async def recover(request: Request):
     # Old revoked tokens stay revoked. New root/capability is required; this endpoint
     # only clears containment after caller supplies a newly validated exchange.
     claims = ISSUER.verify(data['new_token'])
-    if claims['task'] != state['run_id'] or digest(data['new_token']) in state['revoked'] or not claims.get('act'):
+    if (claims['task'] != state['run_id'] or digest(data['new_token']) in state['revoked'] or
+            claims.get('act', {}).get('sub') != state['actors']['A']['spiffe_id'] or
+            not claims.get('actor_svid_digest') or claims['actor_svid_digest'] in state['blocked_svid_digests']):
         raise HTTPException(403)
     state['suspended'] = False
     state['accountability'] = 'complete'

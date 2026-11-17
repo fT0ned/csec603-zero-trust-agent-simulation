@@ -14,12 +14,15 @@ from testbed.extension.study import source_files, verify_local_models
 
 
 def verify():
-    config = json.loads((ROOT / 'configs/extension-study.json').read_text())
+    config = json.loads((ROOT / 'configs/extension-study.json').read_text(encoding='utf-8'))
     verify_local_models(config)
     services = [json.loads(line) for line in compose('ps', '--format', 'json').splitlines() if line.strip()]
     if len(services) != 14 or any(s.get('Health') != 'healthy' for s in services):
         raise RuntimeError('every one of fourteen Compose services must be healthy')
     files = [n for n in source_files() if n.startswith('testbed/')]
+    original = json.loads((ROOT / 'configs/final-study-freeze.json').read_text(encoding='utf-8'))
+    files += [n for n in original['file_hashes'] if n.startswith(('testbed/', 'infra/', 'analysis/', 'scripts/'))]
+    files = sorted(set(files))
     program = "import json,hashlib,pathlib;print(json.dumps({n:hashlib.sha256(pathlib.Path(n).read_bytes().replace(b'\\r\\n',b'\\n')).hexdigest() for n in " + repr(files) + "}))"
     host = {n: hashlib.sha256((ROOT / n).read_bytes().replace(b'\r\n', b'\n')).hexdigest() for n in files}
     runtime = {}

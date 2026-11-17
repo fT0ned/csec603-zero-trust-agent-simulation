@@ -179,16 +179,18 @@ class Issuer:
             current_token, current = None, parent
         return claims
 
-    def exchange(self, parent_token, actor, scope, budget, next_actor, *, jkt=None, enforce=True):
+    def exchange(self, parent_token, actor, scope, budget, next_actor, *, jkt=None, enforce=True, actor_svid_digest=None):
         self._validate_budget(budget)
         parent = self.verify(parent_token, enforce_chain=enforce)
         if actor != parent['next_actor']:
             raise ValueError('exchange actor not authorized')
         if enforce and (not set(scope) <= set(parent['scope']) or set(budget) != set(parent['budget']) or any(budget[k] > parent['budget'][k] for k in budget)):
             raise ValueError('exchange widens authority')
-        claims = {**copy.deepcopy(parent), 'jti': uuid.uuid4().hex, 'scope': sorted(scope), 'budget': copy.deepcopy(budget),
+        claims = {**copy.deepcopy(parent), 'jti': uuid.uuid4().hex, 'iat': int(time.time()), 'scope': sorted(scope), 'budget': copy.deepcopy(budget),
                   'parent': digest(parent_token), 'next_actor': next_actor,
                   'act': {'sub': actor, **({'act': parent['act']} if parent['act'] else {})}}
+        if actor_svid_digest is not None:
+            claims['actor_svid_digest'] = actor_svid_digest
         if jkt:
             claims['cnf'] = {'jkt': jkt}
         else:
@@ -217,7 +219,8 @@ def classify(audit):
     """Audit-only: exposure/benign copied parameters alone never imply coercion."""
     if audit.get('origin') and audit.get('expected_origin') and audit['origin'] != audit['expected_origin']:
         return 'impersonation'
-    if audit.get('identity_valid') and not audit.get('authority_valid', True) and audit.get('parameter_provenance'):
+    introduced = [link for link in audit.get('parameter_provenance', []) if not link.get('already_in_principal_intent', False)]
+    if audit.get('identity_valid') and not audit.get('authority_valid', True) and introduced:
         return 'coercion'
     return 'none'
 

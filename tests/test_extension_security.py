@@ -88,6 +88,7 @@ def test_audit_classifier_has_no_truth_input_and_avoids_benign_provenance():
     assert classify(base) == 'none'
     assert classify({**base, 'authority_valid': False}) == 'coercion'
     assert classify({**base, 'authority_valid': False, 'parameter_provenance': []}) == 'none'
+    assert classify({**base, 'authority_valid': False, 'parameter_provenance': [{'parameter': 'vendor', 'already_in_principal_intent': True}]}) == 'none'
     assert classify({**base, 'origin': 'thief'}) == 'impersonation'
     assert classify({'ground_truth': 'coercion', 'scenario': 'coercion'}) == 'none'
 

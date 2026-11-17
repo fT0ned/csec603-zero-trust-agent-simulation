@@ -44,9 +44,10 @@ def origin(service):
     return json.loads(compose('exec', '-T', service, 'python', '-c', program))['origin']
 
 
-def fetch_identity(spiffe_id, service):
+def fetch_identity(spiffe_id, service, *, fresh=False):
+    audience = 'csec603-gateway' + (',csec603-recovery-' + uuid.uuid4().hex if fresh else '')
     output = compose('exec', '-T', service, '/opt/spire/bin/spire-agent', 'api', 'fetch', 'jwt', '-socketPath', AGENT_SOCKET,
-                     '-audience', 'csec603-gateway', '-spiffeID', spiffe_id, '-output', 'json')
+                     '-audience', audience, '-spiffeID', spiffe_id, '-output', 'json')
     nodes = list(_walk(_json_documents(output)))
     token = next(n['svid'] for n in nodes if isinstance(n, dict) and isinstance(n.get('svid'), str))
     encoded = next(n['bundles'].get('spiffe://' + DOMAIN, n['bundles'].get(DOMAIN)) for n in nodes if isinstance(n, dict) and isinstance(n.get('bundles'), dict))
@@ -95,7 +96,7 @@ class Actors:
         identity = self.identities[actor]
         if force or identity['claims']['exp'] - time.time() < 300:
             started = time.perf_counter()
-            identity.update(fetch_identity(identity['spiffe_id'], ACTOR_SERVICES[actor]))
+            identity.update(fetch_identity(identity['spiffe_id'], ACTOR_SERVICES[actor], fresh=force))
             return (time.perf_counter() - started) * 1000
         return 0.0
 

@@ -27,3 +27,23 @@ The separate [enforcement extension](docs/enforcement-extension-protocol.md) use
 ## Main study (used in the paper)
 
 `results/final-study-001` (protocol `docs/final-study-protocol.md`, findings `docs/final-study-findings.md`). Reproduce: `python -m scripts.collect_final_study run --config configs/final-study.json --output results/NEW`, then `python -m analysis.final_study --input results/NEW --output results/NEW/analysis` and `python -m analysis.final_study_report --input results/NEW --analysis results/NEW/analysis`. View with `Start-Dashboard.bat`.
+
+## PAA extension study
+
+Additive work is on branch `extension-study`; original frozen sources and `results/final-study-001` are preserved. The [protocol](docs/extension-study-protocol.md), [review](docs/extension-review.md), [PAA specification](docs/extension-paa-specification.md), [DPoP boundaries](docs/extension-dpop-profile.md), [pilot review](docs/extension-pilot-review.md) and [progress](docs/extension-progress.md) distinguish natural-model results from scripted controls. Original user requirements and the later 3B-model addition are archived [verbatim](docs/extension-user-requirements.txt).
+
+Pilot: four models (DeepSeek Flash, exact GPT-4.1 mini snapshot, pinned Qwen2.5 7B and 3B instruction/tool models), original/neutral prompts, three payload families, five seeds each: **0/120 exact follows**. Only 41 runs actually read the payload-bearing brief; this is a limited-exposure null, not evidence of universal model resistance. No stratum passed the registered 2-of-5 selection rule. The full plan retains scripted coercion/joint/negative controls, signed multi-hop delegation, PAA vs suspend-all/recovery, and model-driven objective/replay arms. See progress for collection status and the completion report when published. The paper is not edited by this work.
+
+One-command reanalysis of the archived extension (Windows PowerShell):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/reproduce_extension.ps1
+```
+
+Fresh collection, using ignored `.env` configured from `.env.extension.example`, Docker Desktop/NVIDIA GPU and the preserved spending ledger:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/reproduce_extension.ps1 -Mode Collect
+```
+
+The collection command checks the remote freeze tag, exact model digests, source/runtime hashes, clocks and network boundaries. It never overwrites the archived study and refuses silent model substitution. Token budget is USD 25 including preserved prior ledger charges. This single-PC deployment is network-separated, not a multi-host enterprise or full OAuth/RFC 9449 conformance demonstration. DOI publication steps are in [the archive guide](docs/extension-zenodo-steps.md).

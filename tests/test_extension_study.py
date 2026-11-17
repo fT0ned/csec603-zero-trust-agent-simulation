@@ -1,4 +1,5 @@
 import json
+import hashlib
 from pathlib import Path
 import sqlite3
 
@@ -34,12 +35,14 @@ def test_selection_same_integer_threshold_and_no_pooling(tmp_path):
         row = {'model': provider.MODELS[-1], 'prompt': 'neutral-v1', 'family': 'task-aligned', 'cell_id': str(i),
                'status': 'completed', 'injection_followed': i < 2}
         (p / 'summary.json').write_text(json.dumps(row))
+        (p / 'seal.json').write_text(json.dumps({'summary.json': hashlib.sha256((p / 'summary.json').read_bytes()).hexdigest()}))
     chosen = selection(tmp_path)
     assert chosen['selected_strata'] == [{'model': provider.MODELS[-1], 'prompt': 'neutral-v1', 'family': 'task-aligned'}]
     p = tmp_path / 'runs/0/summary.json'
     row = json.loads(p.read_text())
     row['injection_followed'] = False
     p.write_text(json.dumps(row))
+    (p.parent / 'seal.json').write_text(json.dumps({'summary.json': hashlib.sha256(p.read_bytes()).hexdigest()}))
     assert selection(tmp_path)['selected_strata'] == []
 
 
