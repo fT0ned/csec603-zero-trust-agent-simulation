@@ -1,0 +1,59 @@
+services:
+  spire-server:
+    volumes:
+      - ./.runtime/extension-spire-server:/var/lib/spire/server
+  spire-agent:
+    volumes:
+      - ./.runtime/extension-spire-agent:/var/lib/spire/agent
+  extension-pdp:
+    build: .
+    image: csec603-testbed:local
+    command: [python, -m, testbed.extension.service]
+    environment:
+      EXTENSION_ROLE: pdp
+      EXTENSION_STATE: /extension-state
+    env_file: [.runtime/control.env]
+    volumes: [./.runtime/extension-audit:/extension-state]
+    ports: [127.0.0.1:8769:8000]
+    networks: [control, tools, admin]
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+  extension-pep:
+    image: csec603-testbed:local
+    command: [python, -m, testbed.extension.service]
+    environment: {EXTENSION_ROLE: pep}
+    env_file: [.runtime/control.env]
+    ports: [127.0.0.1:8768:8000]
+    networks: [front, control]
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      extension-pdp: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+  extension-agent-b:
+    image: csec603-testbed:local
+    command: [python, -c, "import time; time.sleep(2147483647)"]
+    user: '10003:10003'
+    volumes: [workload-socket:/run/spire/sockets:ro]
+    networks: [front]
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      extension-pep: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, python, -c, "import socket; socket.create_connection(('extension-pep',8000),2).close()"]
+      interval: 5s
+      timeout: 3s
+      retries: 12

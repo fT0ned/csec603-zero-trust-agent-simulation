@@ -1,0 +1,298 @@
+===== USER REQUEST 1 (verbatim text) =====
+
+You are a fully autonomous research engineer. You are on my Windows PC with full access to my files, Docker Desktop, PowerShell and Python. Work end to end without asking me anything: review, design, implement, test, pilot, freeze, run, analyse, and finish with a completion report. You have freedom to decide how to do this. Use your judgment. If something is ambiguous, make the most defensible research choice, record why in the protocol, and keep going. Only stop early for the hard limits listed at the bottom.
+
+
+
+# 1. Project context
+
+Repo: `csec603-zero-trust-agent-simulation` (public: github.com/fT0ned/csec603-zero-trust-agent-simulation). Find the local clone on this PC. If there isn't one, clone it.
+
+
+
+The paper is for CSEC.603.600 Enterprise Security at RIT Dubai (Dr. Belal Ali), simulation-based research track, IEEE double-column format:
+
+"Who Authorized This Agent? Identity, Delegation and Accountability in Zero Trust for Agentic AI"
+
+
+
+Core argument: identity authenticity does not prove action legitimacy. Possession, delegated authority and accountability fail separately, and each needs a different enforcement response. This is the Possession–Authority–Accountability (PAA) model. All controls are tested under assume-breach. This is not prompt-injection research.
+
+
+
+Existing frozen study: `results/final-study-001`, 3,090 runs, DeepSeek Flash, temperature 0.
+
+- Part A: scenarios S1–S5.
+
+- Part B: out-of-authority objectives.
+
+- Part C: stolen-token replay against sender binding and auto-suspension.
+
+
+
+Conditions:
+
+- C0: static key.
+
+- C1: SPIRE JWT-SVID.
+
+- C2: OPA policy with task-scoped delegation, workflow limits, careful approval, one-use just-in-time (JIT) grants and hash-chained audit.
+
+- C2-noWF and C2-RS: ablations.
+
+- C2-AS: auto-suspension.
+
+- C3: DPoP-style binding.
+
+- C3-AS: binding plus auto-suspension.
+
+
+
+Key results:
+
+- A static key stayed valid for the whole observation window.
+
+- A JWT-SVID stayed usable until it expired.
+
+- C3, C2-AS and C3-AS refused the stolen token on its first use.
+
+- Auto-suspension also locked out the legitimate agent in 30/30 runs.
+
+- C2 blocked 0/120 out-of-authority actions get through, against 120/120 for C0 and C1.
+
+- Impersonation attribution was 100% for the C2 family and 0% for C0 and C1.
+
+- The injection was followed in 0/300 runs.
+
+
+
+## 1a. Course requirements for the final paper (rev 2.0, these govern)
+
+- 60% paper, 40% 15-minute presentation.
+
+- Address all Report 2 feedback visibly.
+
+- Complete structure: problem, RQs and objectives, methodology, analysis, results, discussion, recommendations, limitations, conclusion.
+
+- Simulation papers must not exceed 18–20 double-column pages. Quality matters more than length, so avoid repetition and unnecessary appendices.
+
+- Connect findings to enterprise risk, architecture, controls, governance, operations and Zero Trust principles. Recommendations must be practical and traceable to the analysis.
+
+- Keep facts and cited evidence, simulation results, assumptions, interpretation and limitations clearly separate.
+
+- Reproducibility: document the architecture, configuration, scenarios, baselines, metrics, repetitions and seeds, assumptions, evaluation procedure, and the software and tools used.
+
+- Use meaningful artifacts: diagrams, comparison tables, risk-control mappings, results tables, evaluation and recommendation matrices.
+
+- Use authoritative, traceable references and no conclusions stronger than the evidence.
+
+- State the limitations explicitly.
+
+- Do a final quality review.
+
+
+
+Paper rubric (60):
+
+- Problem, objectives and structure: 8
+
+- Methodology and reproducibility: 12
+
+- Analysis, findings and evidence: 15
+
+- Enterprise security, Zero Trust and recommendations: 10
+
+- Discussion, limitations and critical thinking: 7
+
+- Writing, references, figures and quality: 8
+
+
+
+The presentation must show evidence rather than claims, label evidence vs assumption vs interpretation, connect to course themes (risk, Zero Trust, architecture, detection, incident response, resilience, governance, usability, operational constraints, business impact), and end with one clear takeaway for enterprises.
+
+
+
+## 1b. Professor's Report 2 feedback (address all of it)
+
+Minor issues:
+
+- The literature synthesis is too dense.
+
+- Impersonation was tested and attributed, but coercion was not, because the LLM never followed an injection.
+
+
+
+Recommended improvements, in priority order:
+
+1. Make coercion actually succeed under the baseline. Measure coercion success rate, prevention and containment under C2/C3, whether the system tells a coerced legitimate agent apart from an impersonator, attribution accuracy, and remediation decision accuracy.
+
+2. Move beyond the single-host testbed: agent → workload identity → remote PEP → policy service → several applications. Measure latency, revocation propagation, failure behaviour and availability across network boundaries.
+
+3. Implement multi-hop delegation (human → Agent A → Agent B → tool). Test whether authority attenuates at each hop, whether provenance survives each hop, and whether the PDP can reconstruct who authorized whom.
+
+4. Formalize PAA: inputs → trust state → failure classification → enforcement response → recovery. Use invariants: failed possession → refuse the request; compromised bearer token → revoke it; valid identity with invalid authority → deny the action and keep the identity; accountability failure → escalate or contain based on confidence. Then compare PAA experimentally against uniform "suspend everything".
+
+5. Replace simulated approval with a realistic model: delay, timeout, abandonment, fatigue, rubber-stamping, false approvals and denials.
+
+6. Implement full RFC 9449 DPoP, or rename C3 as an experimental proof-of-possession scheme. Ideally also compare against mTLS-bound identity.
+
+7. Replicate across at least 3 model families: commercial frontier, an alternative commercial model, and a local open-weight model. The aim is stable control conclusions, not ranking the models.
+
+8. Increase workload diversity (finance, CRM, data export, privileged admin, SaaS APIs, different authority structures) rather than run count.
+
+9. Measure operational costs: policy administration effort, rule count and complexity, identity lifecycle overhead, PEP/PDP resource use, audit storage, recovery time after suspension, availability impact.
+
+10. Archive formally with a DOI (Zenodo, OSF or a GitHub release) and one-command reproduction.
+
+11. Novelty is not the mechanisms. It is "a unified controlled evaluation of possession, delegated authority and accountable attribution for agentic AI, with failure-specific Zero Trust response selection".
+
+12. Tighten the paper around three contributions: experimental evidence → PAA model → enterprise implications.
+
+
+
+The professor's must-haves are 1 (coercion and attribution), 3 (multi-hop) and 2/7 (distributed or multi-model validation of PAA).
+
+
+
+## 1c. Facts already found in the repo (verify them yourself)
+
+- testbed/service.py: the PEP and PA already record origin (socket peer) and `parameter_provenance`, which links request parameters to text returned by tools. This is the basis for coercion attribution.
+
+- The delegation chain is an unsigned list in testbed/fixtures.py, and the PDP does not verify it.
+
+- testbed/binding.py: the harness registers the jkt. There is no cnf.jkt claim in the token, no DPoP-Nonce, and htu is not normalized, so it is not RFC 9449.
+
+- testbed/agent.py supports deepseek-flash and gpt-4.1-mini-2025-04-14. Add more providers following the same pattern.
+
+- There is no recovery path after suspension.
+
+- The original system prompt warns the model that tool content is untrusted. testbed/prompts.py also has 'neutral-v1'.
+
+- The freeze logic in testbed/final_study.py hard-fails if any frozen file changes.
+
+
+
+# 2. What to do
+
+1. Review the whole repo in depth: code, configs, docs, tests and analysis. Also run the existing test suite. Write `docs/extension-review.md` covering how everything works, any defects found, and anything in the paper's claims the code does not support.
+
+2. Design an extension study, `extension-study-001`, that addresses as much of the professor's feedback as is feasible on this PC. Prioritize 1, 3, 4, 7 and 6, then 9, 8 and 5, and do 2 if you can (for example a second VM or a WSL host). Pre-register the hypotheses, metrics, thresholds, conditions, repeats, seeds and exclusion rules in `docs/extension-study-protocol.md` before the full collection.
+
+3. Implement it with unit tests. Pilot it, fix defects, freeze it (new config, freeze file, git tag `extension-study-freeze-v1`), run the full collection, analyse it, and produce figures.
+
+4. Suggested designs. Improve on them if you have a better idea.
+
+   - **Coercion:** new synthetic payload families (task-aligned, authority-spoofing, multi-step indirect), crossed with neutral vs original prompt and with each model. Use a pre-declared pilot selection rule (for example, keep families with ≥30% follow rate at n=5 under C0), then run on fresh seeds.
+
+     - Add a scripted coerced-agent positive control.
+
+     - Add a joint arm where coercion and stolen-token replay happen in the same run.
+
+     - Label each request coercion, impersonation or none using audit fields only. Score against harness ground truth, which the labeling rule never reads.
+
+     - Measure remediation accuracy: revoke for impersonation; deny, keep the identity and flag the input for coercion.
+
+   - **Multi-hop:** RFC 8693-style token exchange with a signed `act` chain and attenuated delegation. Agents A and B get separate SPIFFE IDs. Compare an identity-only PDP against a delegation-aware PDP.
+
+     - Cases: widening scope, forged or truncated chain, stolen B token, principal revokes A mid-workflow (revocation cascade).
+
+     - Measure whether the full chain can be reconstructed from the audit alone, and the latency each hop adds.
+
+   - **PAA vs suspend-all:** each run has legitimate work plus one event: bound-token replay, bearer replay, coerced out-of-scope action, or an audit gap.
+
+     - Add a recovery path (re-attest, new SVID, re-bind) and measure time to recovery.
+
+     - Measure containment, legitimate availability, correct response, false lockouts and time to containment.
+
+   - **Models:** deepseek-flash, gpt-4.1-mini-2025-04-14, and one local open-weight model through Ollama (OpenAI-compatible endpoint, pinned digest, temperature 0). Rerun Part B, Part C and the coercion experiment for each model. Install Ollama and pull the model yourself if needed. Pick a model size this PC can run.
+
+   - **RFC 9449:** issue the token with cnf.jkt, add server nonces and normalize htu, as a new condition C3-9449. Rerun Part C for it. If anything can't be done, document exactly which requirements are not met.
+
+   - **Costs:** Rego rule and line counts, audit bytes per action, docker stats for CPU and memory, issuance and rotation overhead, recovery time.
+
+   - **Approval:** an asynchronous approver simulation swept across delay, timeout, fatigue and rubber-stamp rates, clearly labelled as simulated.
+
+   - **Workloads:** at least 3 new synthetic enterprise workflows, each with its own delegation and positive controls.
+
+5. Archive: push branch `extension-study` and tag it, create a GitHub release, and write the exact Zenodo DOI steps for me (or mint it yourself if my GitHub is linked to Zenodo). Update the README with the reproduce commands.
+
+
+
+# 3. API keys
+
+The DeepSeek and OpenAI keys are in my "emoji stego" folder on this PC. Search for it if you can't find it. Copy them into the repo's ignored `.env` as DEEPSEEK_API_KEY and OPENAI_API_KEY.
+
+- Never print a key, commit it, or write it into logs, transcripts or results.
+
+- Check that `.env` is in .gitignore, and run scripts/scan_staged.py before every commit.
+
+
+
+# 4. Hard limits (the only reasons to stop or ask)
+
+- Do NOT modify, regenerate or delete anything in `results/final-study-001` or its frozen sources. New work goes in new modules, configs and condition names, and every existing test must still pass.
+
+- Total model spend for the extension must not exceed USD 25. The Budget ledger in testbed/agent.py enforces this. If you hit the cap, stop collecting and report.
+
+- Synthetic data only. Mock tools never send real email or move money. No real external targets.
+
+- No outcome-based exclusions and no extra sampling after seeing results. Infrastructure failures get at most one linked rerun, and the originals are kept. Never pool pilot data with the full collection.
+
+- Never invent numbers or references. Report null and negative results exactly. Label real-LLM vs scripted runs everywhere.
+
+- Don't delete anything on my PC outside the repo.
+
+
+
+# 5. Final deliverable: completion report
+
+When everything is done, write `docs/extension-completion-report.md` and paste its full contents in chat. It must contain:
+
+1. Executive summary: what was done, what was not, and why.
+
+2. Repo review findings, including defects found and fixed.
+
+3. For each professor feedback item (1–12 and the two minor issues): status (done, partly done, or not done), what was implemented, file paths, and results. This table becomes our feedback-response appendix.
+
+4. For each experiment: design, conditions, n, seeds, models with exact IDs or digests, runtime, cost, and results. Exact counts, Wilson 95% CIs, medians (IQR), McNemar/Holm where pre-registered, hypothesis verdicts against the thresholds, and every null or negative result.
+
+5. The formal PAA specification: inputs, states, failure classes, invariants, responses, recovery, and how the experiments tested each part.
+
+6. Paper-ready material: new and updated tables (as Markdown and LaTeX), figure files, suggested replacement text for Abstract, Contributions, Methods, Results, Discussion, Limitations and Conclusion, and new references actually used (with DOIs, labelled preprint where applicable). Keep the paper within 18–20 pages: say what to cut or move to the appendix.
+
+7. Reproducibility: commands, config and freeze hashes, tag, release URL, DOI steps, and the hardware and software versions used.
+
+8. Threats to validity introduced by the extension.
+
+9. A list of every deviation from the protocol and every judgment call you made.
+# 6. Run-environment checklist (do these before any collection)
+- Setup: start Docker Desktop, then run `scripts/setup.ps1` (it creates .runtime/bootstrap and .runtime/control.env for SPIRE and the control plane), then `scripts/launch.ps1`. Run `scripts/verify_infra.py` and `scripts/verify_controls.py`, and confirm every container is healthy before piloting.
+- Budget: set STUDY_BUDGET_USD=25 in .env. testbed/agent.py's Budget refuses every model call without it. Keep the spending ledger at .runtime/spend.sqlite.
+- Git: the freeze gate requires the freeze tag to be pushed to origin before a full collection. Use my existing git/GitHub login on this PC. If the push fails, stop and tell me; do not bypass the gate.
+- Keep the PC awake during collection (testbed/power.py keep_awake, or `powercfg` to stop sleep and hibernate). Pause Windows Update restarts for the duration.
+- Docker resources: check Docker Desktop's CPU and memory allocation (the host has 16 logical CPUs and about 17 GB RAM). Reduce concurrency if containers restart or run out of memory. Note that 32 workers distorted timing in the first study.
+- Timing: keep the one-second host clock monitor and the timing-rerun rule from final-study-001 for every timed metric.
+- Ollama: check the GPU and VRAM with nvidia-smi before choosing the local model. If there is no suitable GPU, pick a model small enough for CPU and record the speed.
+- OpenAI and DeepSeek rate limits: on HTTP 429, back off and retry inside the provider wrapper. Retries count against the budget ledger. Never switch models silently.
+- Second host (feedback item 2): WSL is not a separate host. Only claim "multi-host" if you used a genuinely separate machine or VM with its own network stack; otherwise call it "network-separated" and say so.
+- Zenodo: minting a DOI needs my login. Prepare the release and the metadata (.zenodo.json and CITATION.cff) and list the exact clicks for me.
+- Time: aim to finish everything within 48 hours of wall-clock time. If it is going to take longer, finish tier 1 (coercion, multi-hop, PAA vs suspend-all, models, RFC 9449), then write the completion report covering what was done.
+- Checkpoints: write progress to docs/extension-progress.md after each stage so the run can resume if the PC restarts.
+
+Do not write or edit the paper. In item 6, give only tables, figures and exact numbers; skip suggested replacement text and page-cut advice. The paper is written separately.
+
+you can write all of ur analysis and info in the repo idm and infor us where. go cook up brochacho.
+
+
+===== USER REQUEST 2 (verbatim text) =====
+
+hello, sorry to interrupt you but i got this as well
+"Addition for E1/E4: include at least one small instruction-tuned, tool-calling open-weight model via Ollama (e.g. qwen2.5:3b-instruct or llama3.2:3b, pinned digest, temperature 0) as a deliberately weaker agent, in addition to the 7–8B model. Do not use non-instruction models such as GPT-2; they cannot make tool calls. Report its follow rates in the pilot under the same pre-declared selection rule. Keep the scripted coerced-agent arm regardless of what the models do."
+
+This is because we want some sort of coercion to work baically since prevously it was 0/300. continue running as susual and run these as well if you can. 
+
+Contineu from where u left of 
+
+pls store the prompt original one and these in a spereate text file so u refer to them and sue them as a defintion of done.
+
+
