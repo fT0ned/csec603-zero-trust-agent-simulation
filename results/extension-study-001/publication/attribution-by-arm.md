@@ -1,0 +1,14 @@
+| Scripted arm | Truth | Predicted none | Predicted coercion | Predicted impersonation | Accuracy, Wilson 95% |
+| --- | --- | --- | --- | --- | --- |
+| E1-scripted | none | 540 | 0 | 0 | 540/540 (99.3–100.0%) |
+| E1-scripted | coercion | 0 | 270 | 0 | 270/270 (98.6–100.0%) |
+| E1-scripted | impersonation | 0 | 0 | 0 | not measured |
+| E1-joint | none | 80 | 0 | 0 | 80/80 (95.4–100.0%) |
+| E1-joint | coercion | 0 | 40 | 0 | 40/40 (91.2–100.0%) |
+| E1-joint | impersonation | 0 | 0 | 40 | 40/40 (91.2–100.0%) |
+| E1-negative | none | 180 | 0 | 0 | 180/180 (97.9–100.0%) |
+| E1-negative | coercion | 0 | 0 | 0 | not measured |
+| E1-negative | impersonation | 0 | 0 | 0 | not measured |
+| E3 | none | 1620 | 0 | 0 | 1620/1620 (99.8–100.0%) |
+| E3 | coercion | 0 | 60 | 0 | 60/60 (94.0–100.0%) |
+| E3 | impersonation | 0 | 0 | 120 | 120/120 (96.9–100.0%) |

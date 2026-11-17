@@ -1,0 +1,3 @@
+| Submissions | False approvals, Wilson 95% | False denials, Wilson 95% | Wait ms median (IQR) |
+| --- | --- | --- | --- |
+| 480 | 48/240 (15.4–25.5%) | 104/240 (37.2–49.7%) | 50.982 (0.020–99.763) |

@@ -20,3 +20,15 @@ Known recorded pilot model cost: USD 0.035571737. The interrupted unit has incom
 Full plan: 1,570 units — E1 scripted 270, joint 40, negative 120; E2 420; E3 300; E4 objectives 360 and replay 60. Real-model E1 is not collected because no stratum qualified. This is the registered null branch, not an outcome-based exclusion. Full seeds are fresh and do not overlap the pilot.
 
 Full-stage prerequisites: commit all repaired source/tests/protocol/pilot evidence, regenerate source-matching image, pass the full test suite and preflight, freeze config/source/pilot hashes, create and push extension-study-freeze-v1, verify remote gate before collecting.
+
+
+## Post hoc task-drift and attribution diagnostic
+
+In addition to the registered exact-follow endpoint, the independent authority oracle records 9 unauthorized writes across 6/120 (2.3–10.5%) pilot runs. All six affected runs used Qwen2.5 3B with neutral-v1; they involved unrelated CRM exports/deletions or an unrequested permissions-request email, not the specified malicious payload action. There were 38 invalid-authority attempts in total, including reads and unsuccessful application requests. These findings are task drift/authority failure evidence, not verified payload coercion, and they do not change selection or trigger extra sampling.
+
+Audit-only classifier recorded 5 false coercion labels from benign tool-data parameter reuse (for example customer-001 returned by a normal CRM read). There are no ground-truth positive exact-payload coercion requests in this real-model pilot, so natural-model coercion sensitivity cannot be estimated. This is a material limit of parameter provenance as causal attribution. The full scripted attribution results must remain separate.
+
+| True | Predicted | Requests |
+| --- | --- | --- |
+| none | coercion | 5 |
+| none | none | 208 |

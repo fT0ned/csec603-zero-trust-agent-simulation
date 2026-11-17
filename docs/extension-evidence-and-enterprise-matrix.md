@@ -1,0 +1,29 @@
+# Compact evidence and enterprise-control matrix
+
+This is an artifact for the separately authored paper, not replacement manuscript text. It separates authoritative mechanism specifications, measured simulation evidence, assumptions and interpretation. Final counts reside in the completion report and generated publication tables.
+
+| Foundation / evidence class | What it establishes | What it does not establish | Extension measurement / enterprise implication |
+|---|---|---|---|
+| NIST SP 800-207, architectural guidance | Resource-focused, contextual authorization and explicit trust decisions | An agent-specific control's effectiveness or performance | Separate credential possession from action authority; assign lifecycle and policy ownership |
+| SPIFFE JWT-SVID specification, identity format | Signed workload subject and intended audience | A principal's permission for a requested business action | Actual A/B workload identities are inputs to delegated capability admission |
+| RFC 8693, protocol and actor semantics | Token exchange and current/prior actor representation | Automatic attenuation or authorization from historical actors | Verify signed top-level task authority and parent ledger; reconstruct authorization provenance |
+| RFC 9449 / RFC 7638, possession mechanisms | Sender key binding and proof checks / thumbprint construction | Legitimate intent of a valid key holder, complete OAuth conformance of this prototype | Refuse token-only replay; still apply authority policy to a coerced legitimate signer |
+| E1 pilot, real-model behavioral evidence | Exact observed follow rates under these prompts, paths, models and seeds | Universal model resistance, prevention when no attempt occurs, unseen payload behavior | Preserve nulls and limited exposure; retain scripted controls as a different evidence class |
+| E1 scripted/E2/E3, mechanism evidence | Whether implemented gates, attribution signals and response transitions behave as configured | Natural attack prevalence or independently sampled enterprise failure probabilities | Map enforcement response to failure class and quantify legitimate availability/recovery trade-offs |
+| E4, real-model objective/legitimate-agent plus scripted-thief evidence | Control directions with multiple tool-calling implementations | Model rankings or independent temperature-0 population inference | Validate integration across providers; keep model errors and task failure visible |
+| Approval grid, assumed simulated behavior | Consequences of selected delay/error/abandonment parameters | Measured human fatigue or rubber-stamping rates | Plan timeout/escalation and staffing controls; validate assumptions before deployment |
+| Network failure probe/resource frames, engineering description | Behavior and observed costs on this single network-separated PC | Multi-host production resilience, SLOs or sustained throughput | Test redundant/durable control plane and recovery before adopting production availability claims |
+
+| Risk / failure | Recommended control and operational owner | Evidence trace | Limit to retain |
+|---|---|---|---|
+| Copied bearer credential | Sender binding where supported; credential-specific revocation and fresh admission; identity/platform team | E2 stolen-B, E3 replay, E4 replay | Stolen signing keys and same-origin compromise remain outside this test |
+| Authentic agent exceeds principal authority | Task/recipient/vendor scope, attenuating delegation, committed workflow counters and one-use intent; application/data owner | E1 scripted, E2 widening, E4 objectives | Bundled control effects are not separable without further ablations |
+| Coerced legitimate signer | Deny invalid authority and flag introduced external parameters; application owner + SOC | E1 scripted, E3 coercion; E1 real pilot null | Provenance is a controlled signal, not a universal causal detector |
+| Numeric representation bypasses one-use intent | Normalize typed business intent consistently across approval, usage and independent oracle; application/security engineering owner | docs/extension-intent-edge-case.json; testbed/intent_normalization.py | Counterexample refutes universal A3; separate unit-tested helper is not installed in frozen conditions |
+| Withdrawn upstream delegation | Revoke task capability and propagate ancestor denial; principal/delegation service owner | E2 revoke-A | In-memory ledger and one host; no production-wide propagation SLA |
+| Overbroad incident response | Failure-specific PAA policy; credential-level response first when justified; SOC/incident commander | E3 versus suspend-all | Low/high accounting confidence is injected, not an evaluated autonomous detector |
+| Unreliable approval | Timeouts, escalation, reviewer rotation and explicit intent matching; business process owner | Approval grid and deterministic intent gate | Grid parameters are assumptions; live human validation absent |
+| Control-plane outage or restart | Fail closed for protected effects; durable issuer/revocation state and tested re-admission; platform/SRE | Network failure probe and recovery measurements | Prototype loses in-memory STS/run state on restart |
+| Excessive audit/policy cost | Retention/field minimization, rule review, immutable checkpoints and measured capacity; governance/SRE | Rule/line proxies, audit bytes, Docker resource frames | Source counts are not measured human administration effort |
+
+Authoritative sources actually consulted: [NIST SP 800-207, DOI 10.6028/NIST.SP.800-207](https://doi.org/10.6028/NIST.SP.800-207), [JWT-SVID specification](https://github.com/spiffe/spiffe/blob/main/standards/JWT-SVID.md), [RFC 8693, DOI 10.17487/RFC8693](https://doi.org/10.17487/RFC8693), [RFC 9449, DOI 10.17487/RFC9449](https://doi.org/10.17487/RFC9449), [RFC 7638, DOI 10.17487/RFC7638](https://doi.org/10.17487/RFC7638). These are standards/guidance, not empirical performance papers; no new preprint is used.

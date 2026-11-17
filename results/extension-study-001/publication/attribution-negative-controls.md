@@ -1,0 +1,5 @@
+| Condition | Scripted n | Unauthorized write runs, Wilson 95% | True-none request accuracy, Wilson 95% |
+| --- | --- | --- | --- |
+| C0-E | 40 | 10/40 (14.2–40.2%) | 60/60 (94.0–100.0%) |
+| C2-E | 40 | 0/40 (0.0–8.8%) | 60/60 (94.0–100.0%) |
+| C3-9449-E | 40 | 0/40 (0.0–8.8%) | 60/60 (94.0–100.0%) |

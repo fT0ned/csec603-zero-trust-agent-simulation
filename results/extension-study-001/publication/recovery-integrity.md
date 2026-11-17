@@ -1,0 +1,12 @@
+| Event | Policy | n | Changed SVID bytes, Wilson 95% | Old token accepted with current key, Wilson 95% |
+| --- | --- | --- | --- | --- |
+| bound-replay | PAA | 30 | 30/30 (88.6–100.0%) | 0/30 (0.0–11.4%) |
+| bound-replay | suspend-all | 30 | 30/30 (88.6–100.0%) | 0/30 (0.0–11.4%) |
+| bearer-replay | PAA | 30 | 30/30 (88.6–100.0%) | 0/30 (0.0–11.4%) |
+| bearer-replay | suspend-all | 30 | 30/30 (88.6–100.0%) | 0/30 (0.0–11.4%) |
+| coercion | PAA | 30 | 30/30 (88.6–100.0%) | 30/30 (88.6–100.0%) |
+| coercion | suspend-all | 30 | 30/30 (88.6–100.0%) | 0/30 (0.0–11.4%) |
+| audit-gap | PAA | 30 | 30/30 (88.6–100.0%) | 30/30 (88.6–100.0%) |
+| audit-gap | suspend-all | 30 | 30/30 (88.6–100.0%) | 0/30 (0.0–11.4%) |
+| audit-tamper | PAA | 30 | 30/30 (88.6–100.0%) | 0/30 (0.0–11.4%) |
+| audit-tamper | suspend-all | 30 | 30/30 (88.6–100.0%) | 0/30 (0.0–11.4%) |
