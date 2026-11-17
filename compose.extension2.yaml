@@ -1,0 +1,56 @@
+services:
+  extension2-pdp:
+    build: .
+    image: csec603-study002:local
+    command: [python, -m, testbed.extension2.service]
+    environment: {EXTENSION_ROLE: pdp, EXTENSION_STATE: /extension-state}
+    env_file: [.runtime/control.env]
+    volumes: [./.runtime/extension2-audit:/extension-state]
+    ports: [127.0.0.1:8779:8000]
+    networks: [control, tools, admin]
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+  extension2-pep:
+    image: csec603-study002:local
+    command: [python, -m, testbed.extension2.service]
+    environment: {EXTENSION_ROLE: pep, EXTENSION_PDP: 'http://extension2-pdp:8000'}
+    env_file: [.runtime/control.env]
+    ports: [127.0.0.1:8778:8000]
+    networks: [front, control]
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on: {extension2-pdp: {condition: service_healthy}}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+  extension2-agent-a: &study002_actor
+    image: csec603-study002:local
+    command: [python, -c, "import time; time.sleep(2147483647)"]
+    user: '10001:10001'
+    volumes: [workload-socket:/run/spire/sockets:ro]
+    networks: [front]
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on: {extension2-pep: {condition: service_healthy}}
+    healthcheck:
+      test: [CMD, python, -c, "import socket; socket.create_connection(('extension2-pep',8000),2).close()"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+  extension2-agent-b:
+    <<: *study002_actor
+    user: '10003:10003'
+  extension2-thief:
+    <<: *study002_actor
+    user: '10002:10002'
+    volumes: []

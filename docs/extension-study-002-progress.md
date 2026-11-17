@@ -1,0 +1,5 @@
+# Study002 progress
+
+Pre-inference: protected58,669 original/001 files with raw-byte inventory; prior global ledgerUSD1.898119173, last entry17327. Protocol written before pilot. Added separate PEP/PDP/actor containers, numeric intent repair, independent oracle, forced-read provider prelude and model pins. Bare Llama alias404 resolved before inference to explicit3B-instruct-Q4_K_M. All four local models advertise tool capability, Qwen digests match001. No study002 inference calls yet.
+
+Pilot readiness:231 tests pass (all216 prior tests included). Nineteen Compose services healthy; study002 runtime hashes and front/private boundary checks pass. Original infrastructure/control verifiers pass; their generated legacy verification document was restored. Scripted28-case integration plus a separate persisted-input-flag check passed without model generation. Numeric intent and semantic idempotency regressions pass. All58,669 protected original/001 files match initial raw hashes. Starting fixed240-unit pilot only after protocol/source commit and push.
