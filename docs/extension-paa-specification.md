@@ -1,0 +1,26 @@
+# Formal PAA laboratory specification
+
+PAA is a decision model, not a new cryptographic primitive. Reference implementation: `testbed/extension/security.py`, enforced by `service.py`. All inputs below are observations from the trusted enforcement boundary, not the harness's attack labels.
+
+Let each request carry trusted tuple `(I, K, D, W, O, V, L)`: validated identity/credential status I; proof/key possession result K; signed current delegation D; committed workflow state W; observed socket peer O; parameter provenance V from prior tool responses; audit integrity/confidence L. Harness truth is absent from this tuple.
+
+The trust state is a product, not a single trust score: possession in {valid, failed, unknown}; authority in {valid, invalid, unknown}; accountability in {complete, gap/low confidence, tamper/high confidence}. Identity lifecycle state is {active, credential-revoked, identity-contained, recovering}. A valid identity does not imply either authority or trustworthy provenance.
+
+| Failure class / trusted trigger | PAA response | Identity/capability effect | Recovery prerequisite |
+|---|---|---|---|
+| Failed signature, proof, binding, age, nonce or replay check | Refuse this request | Preserve legitimate owner's independent valid credential where no compromise is established | Valid proof/identity for ordinary requests |
+| Accepted bearer presented from the independently observed thief peer | Revoke the compromised task credential and refuse | Old credential digest remains denied; workload identity may be reissued | Fresh validated SVID fetch and new capability |
+| Valid identity/possession; action outside signed task or committed workflow/intent | Deny this action; retain identity | Preserve current credential unless another failure exists | New principal grant for any widened authority, not caller-claimed scope |
+| Invalid authority plus exact parameter provenance from observed external tool text | Deny, keep identity, flag input | Same identity preserved; provenance recorded for investigation | Remove/inspect input or obtain a separately authorized task |
+| Low-confidence accounting gap | Escalate, preserve restricted legitimate work | Log confidence signal; no automatic global suspension | Administrative audit repair |
+| High-confidence accounting tamper | Contain identity and revoke affected credential | Refuse subsequent work pending repair | Admin recovery after new identity validation and capability; old tokens remain revoked |
+
+Classification is separate from enforcement. Observed peer mismatch labels impersonation only when a trusted expected peer exists. A legitimate peer, authenticated identity, invalid authority and parameter-level provenance label coercion. Harmless exposure or authorized copied values label none. No observed causal signal means none/unknown, even if authority is invalid. Origin mapping and provenance are controlled laboratory assumptions: they cannot tell every same-host compromise, NAT/proxy ambiguity, paraphrase or concealed influence apart.
+
+The response precedence is: uniform comparator suspends on any anomaly; PAA confirmed bearer compromise -> revoke; possession failure -> refuse; high audit tamper -> contain; low audit gap -> escalate; invalid authority -> deny/flag; otherwise allow. Authority remains an independent gate even when the response selector escalates an accounting gap. The PEP refuses effect dispatch when identity/possession or enforced authority fails. Idempotency, workflow counters and effects are serialized.
+
+Invariants: (P1) failed possession produces no application effect; (P2) confirmed compromised bearer and suspended/contained credentials remain revoked across recovery; (A1) authority cannot grow across delegated exchanges; (A2) valid identity plus invalid authority yields no protected effect and no automatic identity suspension; (A3) one-use approved intent cannot be spent twice; (L1) classification never reads harness truth; (L2) audit claims/provenance/decision/effect are hash-chained against an independently retained checkpoint; (R1) caller requests cannot clear containment; privileged recovery requires a newly validated exchange; (R2) old revoked tokens do not become valid after recovery.
+
+E1 tests A2/L1 and coercion response, with scripted positive controls and explicit attribution negatives. E2 tests A1, signed provenance, actor separation and cascade revocation. E3 tests P1/P2/A2/L1/R1/R2 against suspend-all, including availability and recovery. E4 tests whether control directions persist with different legitimate model implementations and explicit objectives. Original tamper tests establish chain detection, not the trustworthiness of a malicious control-plane logger. The extension's low/high audit signals are deliberately injected by the trusted test interface; automatic audit anomaly detection is not claimed.
+
+Response accuracy uses a policy-independent preferred-action oracle: refuse for bound replay, revoke for accepted stolen bearer, deny/keep/flag for coercion, escalate for low-confidence gap, contain for high-confidence tamper (uniform suspension counts as containment only for that final case). Security containment and preferred response accuracy are reported separately: an overbroad suspension can contain an attack while choosing the wrong availability trade-off.

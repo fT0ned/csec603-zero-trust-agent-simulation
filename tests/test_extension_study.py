@@ -16,7 +16,7 @@ def test_preregistered_manifest_and_seed_separation():
     assert len(pilot) == 120
     assert len({r['cell_id'] for r in pilot}) == len(pilot)
     full = cells({**config, 'selected_strata': []})
-    assert len(full) == 1450
+    assert len(full) == 1570
     assert len({r['cell_id'] for r in full}) == len(full)
     assert not {r['seed'] for r in pilot} & {r['seed'] for r in full}
     assert {r['model'] for r in pilot} == set(provider.MODELS)

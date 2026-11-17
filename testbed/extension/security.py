@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import math
 import posixpath
 import re
 import secrets
@@ -128,6 +129,7 @@ class Issuer:
         self.revoked = set()
 
     def root(self, task, principal, scope, budget, next_actor, ttl=900):
+        self._validate_budget(budget)
         now = int(time.time())
         claims = {'iss': ISSUER, 'aud': AUDIENCE, 'sub': principal, 'iat': now, 'exp': now + ttl,
                   'jti': uuid.uuid4().hex, 'task': task, 'scope': sorted(scope), 'budget': copy.deepcopy(budget),
@@ -138,6 +140,11 @@ class Issuer:
         token = jwt.encode(claims, self.key, algorithm='ES256', headers={'typ': 'at+jwt'})
         self.ledger[digest(token)] = copy.deepcopy(claims)
         return token
+
+    @staticmethod
+    def _validate_budget(budget):
+        if not isinstance(budget, dict) or not budget or any(not isinstance(k, str) or isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v < 0 for k, v in budget.items()):
+            raise ValueError('finite nonnegative capability budgets required')
 
     def verify(self, token, *, enforce_chain=True, require_live=True):
         claims = decode_cap(token, self.key.public_key())
@@ -173,6 +180,7 @@ class Issuer:
         return claims
 
     def exchange(self, parent_token, actor, scope, budget, next_actor, *, jkt=None, enforce=True):
+        self._validate_budget(budget)
         parent = self.verify(parent_token, enforce_chain=enforce)
         if actor != parent['next_actor']:
             raise ValueError('exchange actor not authorized')

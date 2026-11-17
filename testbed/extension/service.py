@@ -174,7 +174,12 @@ async def tool(request: Request):
     data['_authorization'] = request.headers.getlist('authorization')
     data['_proofs'] = request.headers.getlist('dpop')
     data['_url'] = str(request.url)
-    return await forward('/internal/execute', data)
+    result = await forward('/internal/execute', data)
+    if result.get('dpop_required') and not result['audit']['possession_valid']:
+        challenge = await forward('/internal/nonce', {'context': 'resource:' + data['run_id']})
+        return JSONResponse(result, status_code=401, headers={
+            'DPoP-Nonce': challenge['nonce'], 'WWW-Authenticate': 'DPoP error="invalid_dpop_proof"'})
+    return result
 
 
 @app.post('/internal/execute')
@@ -251,6 +256,7 @@ async def execute(request: Request):
             response = 'observe_only'
         if enforce and response in ('suspend_identity', 'contain_identity'):
             state['suspended'] = True
+            state['revoked'].add(digest(token))
         if enforce and response == 'revoke_credential':
             state['revoked'].add(digest(token))
         allowed = possession_valid and not state['suspended'] and digest(token) not in state['revoked'] and (allowed_authority or not enforce)
@@ -283,6 +289,7 @@ async def execute(request: Request):
                    counters=copy.deepcopy(state['counters']))
         row = append(state, row)
         return {'allowed': allowed, 'outcome': outcome, 'result': result, 'audit': row,
+                'dpop_required': state['condition'] == 'C3-9449-E',
                 'checkpoint': {'count': len(state['audit']), 'hash': row['hash']},
                 'authorization_ms': (time.perf_counter() - started) * 1000}
 

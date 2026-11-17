@@ -74,6 +74,14 @@ def test_baseline_does_not_disable_cryptographic_integrity():
         issuer.verify(wider[:-8] + 'AAAAAAAA', enforce_chain=False)
 
 
+@pytest.mark.parametrize('value', [float('nan'), float('inf'), -1, True, '5'])
+def test_capability_budgets_reject_nonfinite_negative_and_bad_types(value):
+    issuer = Issuer()
+    root = issuer.root('task', 'human', ['read'], {'records': 1}, 'A')
+    with pytest.raises(ValueError):
+        issuer.exchange(root, 'A', ['read'], {'records': value}, 'B')
+
+
 def test_audit_classifier_has_no_truth_input_and_avoids_benign_provenance():
     base = {'origin': 'A', 'expected_origin': 'A', 'identity_valid': True, 'authority_valid': True,
             'parameter_provenance': [{'parameter': 'path'}]}

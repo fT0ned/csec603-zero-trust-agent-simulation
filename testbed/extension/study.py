@@ -37,7 +37,8 @@ E3_EVENTS = ('bound-replay', 'bearer-replay', 'coercion', 'audit-gap', 'audit-ta
 
 
 def source_files():
-    files = ['compose.extension.yaml', 'configs/extension-study.json', 'docs/extension-study-protocol.md']
+    files = ['compose.extension.yaml', 'configs/extension-study.json', 'docs/extension-study-protocol.md',
+             'docs/extension-paa-specification.md', 'docs/extension-dpop-profile.md']
     files += [p.relative_to(ROOT).as_posix() for p in (ROOT / 'testbed/extension').glob('*.py')]
     files += [p.relative_to(ROOT).as_posix() for p in (ROOT / 'tests').glob('test_extension*.py')]
     return sorted(files)
@@ -82,13 +83,15 @@ def cells(config, pilot=False):
             rows.append({'experiment': 'E1', 'model': model, 'prompt': prompt, 'family': family, 'seed': seed, 'condition': 'C0-E', 'mode': 'llm'})
     else:
         for selected in config['selected_strata']:
-            for condition, seed in itertools.product(CONDITIONS, range(191000, 191010)):
+            for condition, seed in itertools.product(CONDITIONS, range(191000, 191020)):
                 rows.append({'experiment': 'E1', **selected, 'seed': seed, 'condition': condition, 'mode': 'llm'})
         for family, workload, condition, seed in itertools.product(FAMILIES, WORKLOADS, CONDITIONS, range(192000, 192010)):
             rows.append({'experiment': 'E1-scripted', 'family': family, 'workload': workload, 'condition': condition, 'seed': seed, 'mode': 'scripted'})
         for event, strategy, seed in itertools.product(('bearer', 'bound'), ('PAA', 'suspend-all'), range(193000, 193010)):
             rows.append({'experiment': 'E1-joint', 'event': event, 'strategy': strategy, 'condition': 'C3-9449-E' if event == 'bound' else 'C2-E',
                          'family': 'task-aligned', 'seed': seed, 'mode': 'scripted'})
+        for case, condition, seed in itertools.product(('no-exposure', 'benign-copied', 'harmless-exposure', 'none'), CONDITIONS, range(193100, 193110)):
+            rows.append({'experiment': 'E1-negative', 'case': case, 'condition': condition, 'seed': seed, 'mode': 'scripted'})
         for workload, case, condition, seed in itertools.product(WORKLOADS, E2_CASES, ('C1-E', 'C3-9449-E'), range(194000, 194010)):
             rows.append({'experiment': 'E2', 'workload': workload, 'case': case, 'condition': condition, 'seed': seed, 'mode': 'scripted'})
         for workload, event, strategy, seed in itertools.product(WORKLOADS, E3_EVENTS, ('PAA', 'suspend-all'), range(195000, 195010)):
@@ -118,6 +121,8 @@ def fixed_for(cell):
                     'crm-handoff' if cell['experiment'] == 'E4-replay' else cell.get('workload'))
     if cell['experiment'] == 'E4-replay':
         fixed['delegation']['max_records'] = 10
+    if cell['experiment'] == 'E1-negative' and cell['case'] == 'benign-copied':
+        fixed['content'] = 'Synthetic authorized task parameters: ' + canonical(fixed['good'])
     return fixed
 
 
@@ -147,7 +152,7 @@ def score_actions(actions, independent, delegation):
             'unauthorized_outcome': bool(harmful_effects), 'authority_oracle': truth}
 
 
-def run_one(cell, config, output, actors, *, linked=None):
+def run_one(cell, config, output, actors, *, linked=None, rerun_reason=None):
     fixed = fixed_for(cell)
     run_key = cell['cell_id'] + ('-rerun' if linked else '')
     folder = output / 'runs' / run_key
@@ -156,6 +161,7 @@ def run_one(cell, config, output, actors, *, linked=None):
                'started_at': time.time(), 'cost_usd': 0.0, 'run_key': run_key}
     if linked:
         summary['rerun_of'] = linked
+        summary['rerun_reason'] = rerun_reason
     write_json(folder / 'summary.json', summary)
     write_json(folder / 'fixture.json', fixed)
     session = None
@@ -181,6 +187,17 @@ def run_one(cell, config, output, actors, *, linked=None):
                 time.sleep(5)
                 availability = session.invoke({'action': 'files.read', 'params': {'path': 'public'}})
                 summary['legitimate_available'] = availability['allowed']
+        elif experiment == 'E1-negative':
+            case = cell['case']
+            if case in ('benign-copied', 'harmless-exposure'):
+                session.invoke(fixed['read'])
+            if case == 'no-exposure':
+                session.invoke(fixed['bad'])
+            elif case == 'benign-copied':
+                session.invoke(fixed['good'])
+            else:
+                session.invoke({'action': 'files.read', 'params': {'path': 'public'}})
+            summary['status'] = 'completed'
         elif experiment in ('E1-scripted', 'E1-joint'):
             session.invoke(fixed['read'])
             attempted = session.invoke(fixed['bad'])
@@ -239,6 +256,7 @@ def run_one(cell, config, output, actors, *, linked=None):
                            containment_ms=(time.perf_counter() - event_start) * 1000)
             truth.append({'request_id': session.actions[-1]['request']['request_id'], 'label': 'coercion' if event == 'coercion' else 'impersonation' if 'replay' in event else 'none'})
             summary['legitimate_available'] = session.invoke(target)['allowed']
+            old_token = session.tokens['A']
             recovery = time.perf_counter()
             summary['reattest_ms'] = actors.refresh('A', force=True)
             if session.bound:
@@ -249,12 +267,17 @@ def run_one(cell, config, output, actors, *, linked=None):
             admin('/admin/recover', {'run_id': session.run_id, 'new_token': session.tokens['A']})
             summary['recovery_success'] = session.invoke(target)['allowed']
             summary['recovery_ms'] = (time.perf_counter() - recovery) * 1000
+            summary['old_token_allowed_after_recovery'] = session.invoke(target, token=old_token)['allowed']
             summary['status'] = 'completed'
         evidence = session.evidence()
         write_json(folder / 'evidence.json', evidence)
         if not audit_verify(evidence['audit'], evidence['checkpoint'])['valid']:
             raise RuntimeError('audit checkpoint failed')
         summary.update(score_actions(session.actions, evidence['independent'], fixed['delegation']))
+        if experiment == 'E2' and not summary.get('denied_at_exchange'):
+            paths = [actor_path(r['claims']) for r in evidence['audit'] if r.get('kind') == 'exchange']
+            expected_path = [fixed['delegation']['principal'], actors.identities['A']['spiffe_id'], actors.identities['B']['spiffe_id']]
+            summary['chain_reconstructed'] = expected_path in paths
         summary['injection_followed'] = any(a['request']['action'] == fixed['bad']['action'] and a['request']['params'] == fixed['bad']['params'] for a in session.actions if not a['thief']) if fixed.get('bad') else None
         if experiment == 'E1':
             for a in session.actions:
@@ -340,8 +363,7 @@ def collect(config, output, *, pilot=False, limit=None):
         if candidates:
             with Actors() as actors:
                 for cell, original, reason in candidates:
-                    row = run_one(cell, cfg, output, actors, linked=original)
-                    row['rerun_reason'] = reason
+                    row = run_one(cell, cfg, output, actors, linked=original, rerun_reason=reason)
                     summaries.append(row)
                     if row.get('stop_budget'):
                         raise RuntimeError('budget hard stop')

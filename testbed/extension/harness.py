@@ -25,7 +25,7 @@ def container(service, data):
         # may otherwise accidentally retain credential-bearing request details.
         raise RuntimeError('extension client subprocess failed')
     value = json.loads(process.stdout)
-    if value['status'] != 200:
+    if value['status'] != 200 and not (value['status'] == 401 and value.get('data', {}).get('outcome') == 'denied'):
         raise RuntimeError('extension client HTTP ' + str(value['status']))
     return value
 
@@ -117,6 +117,7 @@ class Session:
         self.exchanges = []
         self.actions = []
         self.key_ids = {}
+        self.generated_keys = []
         for actor in actors.identities:
             actors.refresh(actor)
         self.start = admin('/admin/start', {'run_id': self.run_id, 'condition': condition, 'strategy': strategy,
@@ -130,6 +131,7 @@ class Session:
         key_id = self.run_id + ('-recovery' if recovery else '')
         self.key_ids[actor] = key_id
         container(ACTOR_SERVICES[actor], {'mode': 'keygen', 'run_id': key_id})
+        self.generated_keys.append((actor, key_id))
 
     def exchange(self, actor='A', parent=None, scope=None, budget=None, next_actor=None):
         if self.bound and actor not in self.key_ids:
@@ -158,6 +160,6 @@ class Session:
         return admin('/admin/evidence/' + self.run_id, get=True)
 
     def close(self):
-        for actor, key_id in self.key_ids.items():
+        for actor, key_id in self.generated_keys:
             container(ACTOR_SERVICES[actor], {'mode': 'cleanup', 'run_id': key_id})
         admin('/admin/retire', {'run_id': self.run_id})
