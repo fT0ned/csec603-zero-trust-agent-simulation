@@ -1,0 +1,78 @@
+{
+  "llama3.2:3b-instruct-q4_K_M": {
+    "base_manifest_digest": "a80c4f17acd55265feec403c7aef86be0c25983ab279d83f3bcd3abbcb5b8b72",
+    "profile": "study002-llama3b-tools:v1",
+    "profile_manifest_digest": "a86ac6ba635b12461c92c9818e5ffba56bc09ca4ea75b7e91a1d00b0121580f0",
+    "stock_template": "<|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\n\n{{ if .System }}{{ .System }}\n{{- end }}\n{{- if .Tools }}When you receive a tool call response, use the output to format an answer to the orginal user question.\n\nYou are a helpful assistant with tool calling capabilities.\n{{- end }}<|eot_id|>\n{{- range $i, $_ := .Messages }}\n{{- $last := eq (len (slice $.Messages $i)) 1 }}\n{{- if eq .Role \"user\" }}<|start_header_id|>user<|end_header_id|>\n{{- if and $.Tools $last }}\n\nGiven the following functions, please respond with a JSON for a function call with its proper arguments that best answers the given prompt.\n\nRespond in the format {\"name\": function name, \"parameters\": dictionary of argument name and its value}. Do not use variables.\n\n{{ range $.Tools }}\n{{- . }}\n{{ end }}\n{{ .Content }}<|eot_id|>\n{{- else }}\n\n{{ .Content }}<|eot_id|>\n{{- end }}{{ if $last }}<|start_header_id|>assistant<|end_header_id|>\n\n{{ end }}\n{{- else if eq .Role \"assistant\" }}<|start_header_id|>assistant<|end_header_id|>\n{{- if .ToolCalls }}\n{{ range .ToolCalls }}\n{\"name\": \"{{ .Function.Name }}\", \"parameters\": {{ .Function.Arguments }}}{{ end }}\n{{- else }}\n\n{{ .Content }}\n{{- end }}{{ if not $last }}<|eot_id|>{{ end }}\n{{- else if eq .Role \"tool\" }}<|start_header_id|>ipython<|end_header_id|>\n\n{{ .Content }}<|eot_id|>{{ if $last }}<|start_header_id|>assistant<|end_header_id|>\n\n{{ end }}\n{{- end }}\n{{- end }}",
+    "corrected_template": "<|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\n\n{{ if .System }}{{ .System }}\n{{- end }}\n{{- if .Tools }}When you receive a tool call response, use the output to format an answer to the orginal user question.\n\nYou are a helpful assistant with tool calling capabilities.\n{{- end }}<|eot_id|>\n{{- range $i, $_ := .Messages }}\n{{- $last := eq (len (slice $.Messages $i)) 1 }}\n{{- if eq .Role \"user\" }}<|start_header_id|>user<|end_header_id|>\n{{- if $.Tools }}\n\nGiven the following functions, please respond with a JSON for a function call with its proper arguments that best answers the given prompt.\n\nRespond in the format {\"name\": function name, \"parameters\": dictionary of argument name and its value}. Do not use variables.\n\n{{ range $.Tools }}\n{{- . }}\n{{ end }}\n{{ .Content }}<|eot_id|>\n{{- else }}\n\n{{ .Content }}<|eot_id|>\n{{- end }}{{ if $last }}<|start_header_id|>assistant<|end_header_id|>\n\n{{ end }}\n{{- else if eq .Role \"assistant\" }}<|start_header_id|>assistant<|end_header_id|>\n{{- if .ToolCalls }}\n{{ range .ToolCalls }}\n{\"name\": \"{{ .Function.Name }}\", \"parameters\": {{ .Function.Arguments }}}{{ end }}\n{{- else }}\n\n{{ .Content }}\n{{- end }}{{ if not $last }}<|eot_id|>{{ end }}\n{{- else if eq .Role \"tool\" }}<|start_header_id|>ipython<|end_header_id|>\n\n{{ .Content }}<|eot_id|>{{ if $last }}<|start_header_id|>assistant<|end_header_id|>\n\n{{ end }}\n{{- end }}\n{{- end }}",
+    "recipe": {
+      "model": "study002-llama3b-tools:v1",
+      "from": "llama3.2:3b-instruct-q4_K_M",
+      "template": "<|start_header_id|>system<|end_header_id|>\n\nCutting Knowledge Date: December 2023\n\n{{ if .System }}{{ .System }}\n{{- end }}\n{{- if .Tools }}When you receive a tool call response, use the output to format an answer to the orginal user question.\n\nYou are a helpful assistant with tool calling capabilities.\n{{- end }}<|eot_id|>\n{{- range $i, $_ := .Messages }}\n{{- $last := eq (len (slice $.Messages $i)) 1 }}\n{{- if eq .Role \"user\" }}<|start_header_id|>user<|end_header_id|>\n{{- if $.Tools }}\n\nGiven the following functions, please respond with a JSON for a function call with its proper arguments that best answers the given prompt.\n\nRespond in the format {\"name\": function name, \"parameters\": dictionary of argument name and its value}. Do not use variables.\n\n{{ range $.Tools }}\n{{- . }}\n{{ end }}\n{{ .Content }}<|eot_id|>\n{{- else }}\n\n{{ .Content }}<|eot_id|>\n{{- end }}{{ if $last }}<|start_header_id|>assistant<|end_header_id|>\n\n{{ end }}\n{{- else if eq .Role \"assistant\" }}<|start_header_id|>assistant<|end_header_id|>\n{{- if .ToolCalls }}\n{{ range .ToolCalls }}\n{\"name\": \"{{ .Function.Name }}\", \"parameters\": {{ .Function.Arguments }}}{{ end }}\n{{- else }}\n\n{{ .Content }}\n{{- end }}{{ if not $last }}<|eot_id|>{{ end }}\n{{- else if eq .Role \"tool\" }}<|start_header_id|>ipython<|end_header_id|>\n\n{{ .Content }}<|eot_id|>{{ if $last }}<|start_header_id|>assistant<|end_header_id|>\n\n{{ end }}\n{{- end }}\n{{- end }}",
+      "stream": false
+    },
+    "same_weight_metadata": true,
+    "weight_blob": "/root/.ollama/models/blobs/sha256-dde5aa3fc5ffc17176b5e8bdc82f587b24b2678c6c66101bf7da77af9f7ccdff",
+    "stock_details": {
+      "parent_model": "",
+      "format": "gguf",
+      "family": "llama",
+      "families": [
+        "llama"
+      ],
+      "parameter_size": "3.2B",
+      "quantization_level": "Q4_K_M"
+    },
+    "profile_details": {
+      "parent_model": "llama3.2:3b-instruct-q4_K_M",
+      "format": "gguf",
+      "family": "llama",
+      "families": [
+        "llama"
+      ],
+      "parameter_size": "3.2B",
+      "quantization_level": "Q4_K_M",
+      "runner": "llamacpp"
+    },
+    "generation_calls": 0,
+    "template_sha256": "07118611ebb7a8f5add28b88d574c03c9be1a53aaee290caab51a52aabc4d815"
+  },
+  "mistral:7b-instruct": {
+    "base_manifest_digest": "6577803aa9a036369e481d648a2baebb381ebc6e897f2bb9a766a2aa7bfbc1cf",
+    "profile": "study002-mistral7b-tools:v1",
+    "profile_manifest_digest": "12f453be117ce64a333926f234ee296b045c88238df5885863de83a5326de241",
+    "stock_template": "{{- if .Messages }}\n{{- range $index, $_ := .Messages }}\n{{- if eq .Role \"user\" }}\n{{- if and (eq (len (slice $.Messages $index)) 1) $.Tools }}[AVAILABLE_TOOLS] {{ $.Tools }}[/AVAILABLE_TOOLS]\n{{- end }}[INST] {{ if and $.System (eq (len (slice $.Messages $index)) 1) }}{{ $.System }}\n\n{{ end }}{{ .Content }}[/INST]\n{{- else if eq .Role \"assistant\" }}\n{{- if .Content }}{{ .Content }}\n{{- else if .ToolCalls }}[TOOL_CALLS] [\n{{- range .ToolCalls }}{\"name\": \"{{ .Function.Name }}\", \"arguments\": {{ .Function.Arguments }}}\n{{- end }}]\n{{- end }}</s>\n{{- else if eq .Role \"tool\" }}[TOOL_RESULTS] {\"content\": {{ .Content }}} [/TOOL_RESULTS]\n{{- end }}\n{{- end }}\n{{- else }}[INST] {{ if .System }}{{ .System }}\n\n{{ end }}{{ .Prompt }}[/INST]\n{{- end }}{{ .Response }}\n{{- if .Response }}</s>\n{{- end }}",
+    "corrected_template": "{{- if .Messages }}\n{{- range $index, $_ := .Messages }}\n{{- if eq .Role \"user\" }}\n{{- if $.Tools }}[AVAILABLE_TOOLS] {{ $.Tools }}[/AVAILABLE_TOOLS]\n{{- end }}[INST] {{ if $.System }}{{ $.System }}\n\n{{ end }}{{ .Content }}[/INST]\n{{- else if eq .Role \"assistant\" }}\n{{- if .Content }}{{ .Content }}\n{{- else if .ToolCalls }}[TOOL_CALLS] [\n{{- range .ToolCalls }}{\"name\": \"{{ .Function.Name }}\", \"arguments\": {{ .Function.Arguments }}}\n{{- end }}]\n{{- end }}</s>\n{{- else if eq .Role \"tool\" }}[TOOL_RESULTS] {\"content\": {{ .Content }}} [/TOOL_RESULTS]\n{{- end }}\n{{- end }}\n{{- else }}[INST] {{ if .System }}{{ .System }}\n\n{{ end }}{{ .Prompt }}[/INST]\n{{- end }}{{ .Response }}\n{{- if .Response }}</s>\n{{- end }}",
+    "recipe": {
+      "model": "study002-mistral7b-tools:v1",
+      "from": "mistral:7b-instruct",
+      "template": "{{- if .Messages }}\n{{- range $index, $_ := .Messages }}\n{{- if eq .Role \"user\" }}\n{{- if $.Tools }}[AVAILABLE_TOOLS] {{ $.Tools }}[/AVAILABLE_TOOLS]\n{{- end }}[INST] {{ if $.System }}{{ $.System }}\n\n{{ end }}{{ .Content }}[/INST]\n{{- else if eq .Role \"assistant\" }}\n{{- if .Content }}{{ .Content }}\n{{- else if .ToolCalls }}[TOOL_CALLS] [\n{{- range .ToolCalls }}{\"name\": \"{{ .Function.Name }}\", \"arguments\": {{ .Function.Arguments }}}\n{{- end }}]\n{{- end }}</s>\n{{- else if eq .Role \"tool\" }}[TOOL_RESULTS] {\"content\": {{ .Content }}} [/TOOL_RESULTS]\n{{- end }}\n{{- end }}\n{{- else }}[INST] {{ if .System }}{{ .System }}\n\n{{ end }}{{ .Prompt }}[/INST]\n{{- end }}{{ .Response }}\n{{- if .Response }}</s>\n{{- end }}",
+      "stream": false
+    },
+    "same_weight_metadata": true,
+    "weight_blob": "/root/.ollama/models/blobs/sha256-f5074b1221da0f5a2910d33b642efa5b9eb58cfdddca1c79e16d7ad28aa2b31f",
+    "stock_details": {
+      "parent_model": "",
+      "format": "gguf",
+      "family": "llama",
+      "families": [
+        "llama"
+      ],
+      "parameter_size": "7.2B",
+      "quantization_level": "Q4_K_M"
+    },
+    "profile_details": {
+      "parent_model": "mistral:7b-instruct",
+      "format": "gguf",
+      "family": "llama",
+      "families": [
+        "llama"
+      ],
+      "parameter_size": "7.2B",
+      "quantization_level": "Q4_K_M",
+      "runner": "llamacpp"
+    },
+    "generation_calls": 0,
+    "template_sha256": "67ff38caf1d15d464a6e90a123f5a60b71e0f95e2caedc7e463e947e7275c6fb"
+  }
+}

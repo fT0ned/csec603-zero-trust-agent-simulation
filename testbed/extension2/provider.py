@@ -47,9 +47,10 @@ def native_messages(messages):
     return output
 
 
-def loop(task,invoke,transcript,*,model,system_prompt,seed,read_value,content,max_steps=4,record_invalid=None):
+def loop(task,invoke,transcript,*,model,system_prompt,seed,read_value,content,max_steps=4,record_invalid=None,runtime_model=None):
     if model not in MODELS:raise ValueError('unregistered model')
     local=model not in MODELS[:2]
+    wire_model=runtime_model or model
     spec={'input_miss_peak_per_million':0,'output_peak_per_million':0} if local else provider_for(model)
     messages=prelude(task,system_prompt,read_value)
     if not exposed(messages,content):raise RuntimeError('required payload absent from first tool history')
@@ -62,7 +63,7 @@ def loop(task,invoke,transcript,*,model,system_prompt,seed,read_value,content,ma
     with httpx.Client(timeout=180,trust_env=False) as client:
         for step in range(max_steps):
             if local:
-                payload={'model':model,'messages':native_messages(messages),'tools':tools_schema(),'stream':False,
+                payload={'model':wire_model,'messages':native_messages(messages),'tools':tools_schema(),'stream':False,
                          'options':{'temperature':0,'seed':seed,'num_ctx':4096,'num_predict':512},'keep_alive':'2m'}
                 endpoint='http://127.0.0.1:11434/api/chat'
             else:
@@ -88,7 +89,7 @@ def loop(task,invoke,transcript,*,model,system_prompt,seed,read_value,content,ma
                 try:
                     data=response.json();message=data['message'] if local else data['choices'][0]['message']
                     actual=data['model']
-                    accepted=[model] if local else spec['accepted_response_models']
+                    accepted=[wire_model] if local else spec['accepted_response_models']
                     if actual not in accepted or message.get('role')!='assistant':raise ValueError('model/role mismatch')
                     current={'prompt_tokens':data['prompt_eval_count'],'completion_tokens':data['eval_count']} if local else data['usage']
                     charge={'cost_usd':0.,'pricing_note':'local inference; electricity unmeasured'} if local else measured_cost(current,spec,start,end)
@@ -102,7 +103,7 @@ def loop(task,invoke,transcript,*,model,system_prompt,seed,read_value,content,ma
                 if local and not contexts:
                     try:
                         loaded=client.get('http://127.0.0.1:11434/api/ps').json()['models']
-                        contexts.extend({k:item.get(k) for k in ('name','digest','context_length','size','size_vram')} for item in loaded if item['name']==model)
+                        contexts.extend({k:item.get(k) for k in ('name','digest','context_length','size','size_vram')} for item in loaded if item['name']==wire_model)
                     except (httpx.HTTPError,ValueError,KeyError):
                         contexts.append({'context_observation_error':True})
                 break

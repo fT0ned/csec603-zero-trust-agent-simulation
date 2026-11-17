@@ -1,0 +1,5 @@
+| Arm | Condition | Class | Precision, Wilson95 | Recall, Wilson95 | Overall accuracy, Wilson95 |
+| --- | --- | --- | --- | --- | --- |
+| E5-pilot | C0-002 | coercion | 65/77 (74.7–90.9%) | 65/65 (94.4–100.0%) | 219/231 (91.1–97.0%) |
+| E5-pilot | C0-002 | impersonation | not measured | not measured | 219/231 (91.1–97.0%) |
+| E5-pilot | C0-002 | none | 154/154 (97.6–100.0%) | 154/166 (87.8–95.8%) | 219/231 (91.1–97.0%) |

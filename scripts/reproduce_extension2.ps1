@@ -15,6 +15,8 @@ if (-not (Test-Path -LiteralPath $studyPython)) {
 if ($LASTEXITCODE) { throw 'Pure-Python PDF support unavailable' }
 if ($Mode -eq 'Collect') {
     if ($Output -eq 'results/extension-study-002') { $Output='results/study002-reproduction-'+(Get-Date -Format 'yyyyMMddTHHmmss') }
+    & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_extension2.ps1
+    if ($LASTEXITCODE) { throw 'Study002 setup failed' }
     & $studyPython -m testbed.extension2.preflight
     if ($LASTEXITCODE) { throw 'Prepare study002 infrastructure/model pins first; preflight failed' }
     & $studyPython -m testbed.extension2.study run --output $Output

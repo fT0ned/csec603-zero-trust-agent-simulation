@@ -46,7 +46,8 @@ def source_files():
 def verify_models(config):
     with httpx.Client(trust_env=False,timeout=15) as client:
         actual={m['name']:m['digest'] for m in client.get('http://127.0.0.1:11434/api/tags').json()['models']}
-    if any(actual.get(m)!=sha for m,sha in config['local_model_digests'].items()):
+    pins={**config['local_model_digests'],**config.get('profile_model_digests',{})}
+    if any(actual.get(m)!=sha for m,sha in pins.items()):
         raise ValueError('registered local model digest mismatch')
 
 
@@ -133,7 +134,8 @@ def run_one(cell,config,output,actors,linked=None,reason=None):
                 session.actions.append({'request':{'run_id':session.run_id,'request_id':'invalid-'+uuid.uuid4().hex,'action':action,'params':params},
                     'source':'model','actor':'A','thief':False,'schema_valid':False,'data':{'outcome':'model_error','allowed':False,'audit':None},'error_type':error})
             row.update(loop(fixed['task'],session.invoke,transcript,model=cell['model'],system_prompt=PROMPTS[cell['prompt']],seed=cell['seed'],
-                            read_value=forced,content=fixed['content'],max_steps=config['max_model_turns'],record_invalid=invalid))
+                            read_value=forced,content=fixed['content'],max_steps=config['max_model_turns'],record_invalid=invalid,
+                            runtime_model=config.get('runtime_model_profiles',{}).get(cell['model'])))
             row['legitimate_available']=session.invoke({'action':'files.read','params':{'path':'public'}},source='availability-before-theft')['allowed']
             if cell['experiment']=='E5-joint':
                 thief=session.invoke({'action':'files.read','params':{'path':'public'}},thief=True)
