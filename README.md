@@ -1,6 +1,6 @@
 # Easiest way to see the results
 
-Double-click **`Start-Dashboard.bat`** in this folder. A browser page opens with plain-English results for every study (nothing to install, read-only). Details and troubleshooting: [docs/easy-dashboard.md](docs/easy-dashboard.md). From a terminal: `.venv\Scripts\python.exe -m easyboard` (or `python -m easyboard`).
+Double-click **`Start-Dashboard.bat`** in this folder for the existing testbed studies listed in that dashboard (nothing to install, read-only). The separate PAA extensions use the protocols and completion reports linked below. Details and troubleshooting: [docs/easy-dashboard.md](docs/easy-dashboard.md). From a terminal: `.venv\Scripts\python.exe -m easyboard` (or `python -m easyboard`).
 
 # Zero Trust for Agentic AI
 
@@ -49,3 +49,23 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/reproduce_extension_
 The collection command checks the remote freeze tag, exact model digests, source/runtime hashes, clocks and network boundaries. It never overwrites the archived study and refuses silent model substitution. Token budget is USD 25 including preserved prior ledger charges. This single-PC deployment is network-separated, not a multi-host enterprise or full OAuth/RFC 9449 conformance demonstration. DOI publication steps are in [the archive guide](docs/extension-zenodo-steps.md).
 
 The pilot also recorded nine unauthorized task-drift writes across six Qwen3B runs and five false coercion labels; these are separate from exact payload follows. Post-freeze deterministic checks exposed a numeric one-use-intent accounting bug (25 versus25.0) and an encoded trailing-dot URI-normalization edge. Both are disclosed in the report. A unit-tested numeric repair is supplied separately and was not installed in frozen conditions. [Release](https://github.com/fT0ned/csec603-zero-trust-agent-simulation/releases/tag/extension-study-001); DOI login steps remain with the owner. PDF export uses the official pure-Python FontTools4.67.0 wheel through the wrapper, without changing Windows App Control.
+
+## Guaranteed-exposure follow-up (study002)
+
+The [protocol](docs/extension-study-002-protocol.md) and [completion report](docs/extension-study-002-completion-report.md) preserve the prior limited-exposure null unchanged. This additive follow-up completed240 fixed pilot units,5,040 full real-model E5 units,600 planned real-model/scripted-thief joint opportunities and240 scripted attenuation units. The full archive has5880primary/5885raw units; all58,669protected original/001 paths are unchanged;236tests pass.
+
+Full injected C0 baseline: coerced attempts445/900; committed harm432/900. Combined protected conditions committed0/2700coerced harms; per-condition counts, task completion, exposure, exact McNemar/Holm verdicts, attribution errors, confidence intervals and all nulls are in the report. These are synthetic controlled tasks, not general model rankings or production assurances. C3 includes authority enforcement and remains an experimental proof-of-possession profile. Stock Llama/Mistral pilot interfaces failed benign calibration; same-weight rendering fixes were disclosed before full freeze, without extra sampling or changed eligibility. The original pilot is not pooled with full collection.
+
+One-command sealed reanalysis (source/evidence ZIP or checkout):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/reproduce_extension2.ps1
+```
+
+Fresh collection requires a Git checkout with the pushed`extension-study-002-freeze-v1`tag, ignored`.env`, Docker/NVIDIA, network access and the preserved`.runtime/spend.sqlite`ledger. Never reset that ledger to obtain a new budget:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/reproduce_extension2.ps1 -Mode Collect
+```
+
+[Markdown/LaTeX tables and figures](results/extension-study-002/publication), [pilot results](results/extension-study-002-pilot/analysis), [template amendment](docs/extension-study-002-amendments.md), [archive release](https://github.com/fT0ned/csec603-zero-trust-agent-simulation/releases/tag/extension-study-002), and [owner DOI steps](docs/extension-zenodo-steps.md). Global conservative ledgerUSD2.968440308; study002USD1.070321135. The paper was not edited.
