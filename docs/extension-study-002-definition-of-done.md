@@ -11,4 +11,4 @@
 - [x] Exact counts/Wilson CIs, exposure proofs, model-write transcript trace, independent effects, paired exact McNemar/Holm, attribution precision/recall/accuracy and actual input-flag/remediation state.
 - [x] Complete final suite, raw seals/receipts, original/001 byte verification and budget reconciliation (<USD25 global preserved ledger).
 - [x] Markdown/LaTeX tables and figures, completion report with every null/deviation/limitation; no paper edits.
-- [ ] Push branch/archive tag, create and verify release/checksums, update owner DOI steps; paste full completion report in chat.
+- [x] Push branch/archive tag, create and verify release/checksums, update owner DOI steps; paste full completion report in chat.
